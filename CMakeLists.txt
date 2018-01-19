@@ -1,0 +1,127 @@
+cmake_minimum_required(VERSION 3.6)
+
+project(resply VERSION 0.1.0 DESCRIPTION "Modern redis client for C++")
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if (POLICY CMP0025)
+        cmake_policy(SET CMP0025 NEW)
+endif ()
+
+option(BUILD_DOC "Build documentation using doxygen" ON)
+
+add_definitions(-DASIO_STANDALONE)
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
+    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
+    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic-errors -Werror -Wall -Wextra")
+        # Exceptions are not used, asio is used with explicit error checking.
+        # Apparently, protobuf uses __builtin_offsetof in a way which clang declares as
+        # a extension to the language - gcc not. Disable that warning to get it to compile.
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -Wno-extended-offsetof")
+
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+else ()  # currently not maintained any more:
+        add_definitions(-DASIO_HAS_STD_ADDRESSOF)
+        add_definitions(-DASIO_HAS_STD_ARRAY)
+        add_definitions(-DASIO_HAS_CSTDINT)
+        add_definitions(-DASIO_HAS_STD_SHARED_PTR)
+        add_definitions(-DASIO_HAS_STD_TYPE_TRAITS)
+        add_definitions(-DASIO_HAS_STD_ATOMIC)
+        add_definitions(-D_WIN32_WINNT=0x0501)
+        add_definitions(/Wall /EHsc)
+endif ()
+
+include_directories(include)
+
+# https://github.com/chriskohlhoff/asio
+include_directories(ASIO_INCLUDE_PATH)
+
+# https://github.com/nlohmann/json
+# should refer to the directory 'src' of json
+include_directories(JSON_INCLUDE_PATH)
+
+# https://github.com/muellan/clipp
+include_directories(CLIPP_INCLUDE_PATH)
+
+# https://github.com/gabime/spdlog
+include_directories(SPDLOG_INCLUDE_PATH)
+
+
+# protobuf
+find_package(Protobuf REQUIRED)
+include_directories(${Protobuf_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
+
+file(GLOB protos protos/*.proto)
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${protos})
+
+# libresply
+file(GLOB libresply_source src/libresply.cc)
+add_library(libresply OBJECT ${libresply_source})
+target_compile_definitions(libresply PRIVATE RESPLY_VERSION="${PROJECT_VERSION}")
+
+add_library(resply-shared SHARED $<TARGET_OBJECTS:libresply>)
+add_library(resply-static STATIC $<TARGET_OBJECTS:libresply>)
+
+set_target_properties(resply-static PROPERTIES OUTPUT_NAME resply)
+set_target_properties(resply-shared PROPERTIES OUTPUT_NAME resply)
+
+install(TARGETS resply-shared DESTINATION lib)
+install(TARGETS resply-static DESTINATION lib)
+install(FILES include/resply.h DESTINATION include)
+
+
+# cli
+add_executable(resply-cli src/resply-cli.cc)
+target_link_libraries(resply-cli resply-static)
+
+add_executable(proto-cli src/proto-cli.cc ${PROTO_SRCS})
+target_link_libraries(proto-cli ${PROTOBUF_LIBRARIES})
+
+add_executable(grpc-cli src/grpc-cli.cc)
+
+
+# proxy
+add_executable(proxy src/proxy.cc ${PROTO_SRCS})
+target_link_libraries(proxy resply-static ${PROTOBUF_LIBRARIES})
+
+
+# tests
+file(GLOB tests_source tests/*.cc)
+foreach (test_source ${tests_source})
+        get_filename_component(name ${test_source} NAME_WE)
+        set(tests "${tests} ${name}")
+
+        add_executable(${name} ${test_source})
+        target_link_libraries(${name} resply-static)
+        set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+endforeach ()
+
+string(STRIP ${tests} tests)
+
+add_custom_target(
+        tests
+        COMMAND for t in \"${tests}\"\; do ./tests/$$t\; done
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS ${tests}
+        COMMENT "Running tests")
+
+
+# documentation
+find_package(Doxygen)
+if (BUILD_DOC AND DOXYGEN_FOUND)
+        set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
+        set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+
+        configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
+
+        add_custom_target(
+                doc
+                COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                COMMENT "Generating API documentation with Doxygen"
+                VERBATIM)
+else ()
+        message("Doxygen need to be installed to generate the doxygen documentation")
+endif ()

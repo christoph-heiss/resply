@@ -1,0 +1,35 @@
+//
+// Copyright 2018 Christoph Heiss <me@christoph-heiss.me>
+// Distributed under the Boost Software License, Version 1.0.
+//
+// See accompanying file LICENSE in the project root directory
+// or copy at http://www.boost.org/LICENSE_1_0.txt
+//
+
+syntax = "proto3";
+
+package rslp;
+
+
+message Command {
+        enum Type {
+                SIMPLE_STRING = 0;
+                ERROR = 1;
+                INTEGER = 2;
+                BULK_STRING = 3;
+                ARRAY = 4;
+        }
+
+        message Data {
+                oneof data {
+                        string str = 1;
+                        sint64 int = 2;
+                        Command subdata = 3;
+                }
+        }
+
+        Type type = 1;
+        repeated Data data = 2;
+}
+
+
