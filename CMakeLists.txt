@@ -91,14 +91,14 @@ target_link_libraries(proxy resply-static ${PROTOBUF_LIBRARIES})
 file(GLOB tests_source tests/*.cc)
 foreach (test_source ${tests_source})
         get_filename_component(name ${test_source} NAME_WE)
-        set(tests "${tests} ${name}")
+        set(tests ${tests} ${name})
 
         add_executable(${name} ${test_source})
         target_link_libraries(${name} resply-static)
         set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endforeach ()
 
-string(STRIP ${tests} tests)
+string(STRIP "${tests}" tests)
 
 add_custom_target(
         tests
