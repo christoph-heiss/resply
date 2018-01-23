@@ -222,11 +222,11 @@ private:
                 case Result::Type::String:
                 case Result::Type::ProtError:
                 case Result::Type::IOError:
+                        result.string += buffer.substr(0, remaining);
+
                         if (remaining == buffer.length() - 2) {
-                                result.string += buffer.substr(0, remaining);
                                 remaining = 0;
                         } else {
-                                result.string += buffer;
                                 remaining -= buffer.length();
                         }
                 default:
