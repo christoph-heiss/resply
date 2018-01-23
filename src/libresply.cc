@@ -114,7 +114,7 @@ public:
                 size_t remaining{};
 
                 do {
-                        asio::read_until(socket_, buffer, "\r\n" , error_code);
+                        asio::read(socket_, buffer, error_code);
                         check_asio_error(error_code);
 
                         parse_response(result, buffer, remaining);
