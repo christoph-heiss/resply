@@ -57,8 +57,7 @@ file(GLOB protos protos/*.proto)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${protos})
 
 # libresply
-file(GLOB libresply_source src/libresply.cc)
-add_library(libresply OBJECT ${libresply_source})
+add_library(libresply OBJECT src/libresply.cc src/resp-parser.cc)
 target_compile_definitions(libresply PRIVATE RESPLY_VERSION="${PROJECT_VERSION}")
 
 add_library(resply-shared SHARED $<TARGET_OBJECTS:libresply>)
