@@ -39,13 +39,13 @@ namespace resply {
                 /*! \brief Holds the type of the response. */
                 Type type;
 
-                /*! \brief Use when type is String, ProtocolError or IOError */
+                /*! \brief Use when #type is Type::String, Type::ProtocolError or Type::IOError */
                 std::string string;
 
-                /*! \brief Use when type is Integer */
+                /*! \brief Use when #type is Type::Integer */
                 long long integer;
 
-                /*! \brief Use when type is Array */
+                /*! \brief Use when #type is Type::Array */
                 std::vector<Result> array;
 
                 /*! \brief This outputs the stringify'd version of the response into the supplied stream.
@@ -96,7 +96,8 @@ namespace resply {
                 void close();
 
                 /*! \brief Send a command to the server.
-                 *  \param command List of command name and its parameters.
+                 *  \param str List of command name and its parameters.
+                 *  \return The result of the command.
                  *
                  *  The command and parameters are automatically converted to RESP
                  *  as specificed at <https://redis.io/topics/protocol>.
@@ -106,6 +107,7 @@ namespace resply {
                 /*! \brief Send a command to the server.
                  *  \param str The name of the command.
                  *  \param args A series of command arguments.
+                 *  \return The result of the command.
                  *
                  *  The command and parameters are automatically converted to RESP
                  *  as specificed at <https://redis.io/topics/protocol>.
@@ -124,6 +126,7 @@ namespace resply {
                 }
 
         private:
+                /*! \brief String-specialization variant of #command. */
                 template <typename... ArgTypes>
                 Result command(std::stringstream& builder, const std::string& str, ArgTypes... args)
                 {
@@ -131,7 +134,7 @@ namespace resply {
                         return command(builder, args...);
                 }
 
-
+                /*! \brief Number-specialization variant of #command. */
                 template <typename T,
                           typename = typename std::enable_if<std::is_integral<T>::value, T>::type,
                           typename... ArgTypes>
@@ -141,6 +144,7 @@ namespace resply {
                         return command(builder, args...);
                 }
 
+                /*! \brief Specializtion of #command for ending recursion. */
                 Result command(const std::stringstream& builder);
 
                 std::unique_ptr<ClientImpl> impl_;
