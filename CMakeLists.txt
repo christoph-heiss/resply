@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.6)
 
 project(resply VERSION 0.1.0 DESCRIPTION "Modern redis client for C++")
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (POLICY CMP0025)
@@ -12,26 +12,13 @@ option(BUILD_DOC "Build documentation using doxygen" ON)
 
 add_definitions(-DASIO_STANDALONE)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
-    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic-errors -Werror -Wall -Wextra")
-        # Exceptions are not used, asio is used with explicit error checking.
-        # Apparently, protobuf uses __builtin_offsetof in a way which clang declares as
-        # a extension to the language - gcc not. Disable that warning to get it to compile.
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -Wno-extended-offsetof")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic-errors -Werror -Wall -Wextra")
 
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-else ()  # currently not maintained any more:
-        add_definitions(-DASIO_HAS_STD_ADDRESSOF)
-        add_definitions(-DASIO_HAS_STD_ARRAY)
-        add_definitions(-DASIO_HAS_CSTDINT)
-        add_definitions(-DASIO_HAS_STD_SHARED_PTR)
-        add_definitions(-DASIO_HAS_STD_TYPE_TRAITS)
-        add_definitions(-DASIO_HAS_STD_ATOMIC)
-        add_definitions(-D_WIN32_WINNT=0x0501)
-        add_definitions(/Wall /EHsc)
-endif ()
+# Exceptions are not used, asio is used with explicit error checking.
+# Apparently, protobuf uses __builtin_offsetof in a way which clang declares as
+# a extension to the language - gcc not. Disable that warning to get it to compile.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -Wno-extended-offsetof")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 
 include_directories(include)
 

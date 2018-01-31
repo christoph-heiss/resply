@@ -51,7 +51,7 @@ std::ostream& operator<<(std::ostream& ostream, const Result& result)
         case Result::Type::ProtocolError:
         case Result::Type::IOError:
                 ostream << "(error) ";
-                /* fallthrough */
+                [[fallthrough]];
 
         case Result::Type::String:
                 ostream << result.string;
