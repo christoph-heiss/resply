@@ -62,7 +62,7 @@ namespace resply {
 
         /*! \brief Redis client interface
          *
-         *  This class implements the protocol RESP to communicate with a redis server.
+         *  This class implements the RESP to communicate with a redis server.
          */
         class Client {
         public:
@@ -98,7 +98,7 @@ namespace resply {
                 /*! \brief Send a command to the server.
                  *  \param command List of command name and its parameters.
                  *
-                 *  The command and parameters are automatically serialized into the RESP protocol
+                 *  The command and parameters are automatically converted to RESP
                  *  as specificed at <https://redis.io/topics/protocol>.
                  */
                 Result command(const std::vector<std::string>& str);
@@ -107,7 +107,7 @@ namespace resply {
                  *  \param str The name of the command.
                  *  \param args A series of command arguments.
                  *
-                 *  The command and parameters are automatically serialized into the RESP protocol
+                 *  The command and parameters are automatically converted to RESP
                  *  as specificed at <https://redis.io/topics/protocol>.
                  */
                 template <typename... ArgTypes>
