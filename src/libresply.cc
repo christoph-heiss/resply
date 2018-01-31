@@ -48,7 +48,7 @@ const std::string& version()
 std::ostream& operator<<(std::ostream& ostream, const Result& result)
 {
         switch (result.type) {
-        case Result::Type::ProtError:
+        case Result::Type::ProtocolError:
         case Result::Type::IOError:
                 ostream << "(error) ";
                 /* fallthrough */
@@ -161,7 +161,7 @@ private:
 
 
                 case '-':
-                        result.type = Result::Type::ProtError;
+                        result.type = Result::Type::ProtocolError;
                         // Exclude the final \r\n bytes
                         result.string += buffer.substr(1, buffer.length() - 3);
 
@@ -220,7 +220,7 @@ private:
         {
                 switch (result.type) {
                 case Result::Type::String:
-                case Result::Type::ProtError:
+                case Result::Type::ProtocolError:
                 case Result::Type::IOError:
                         result.string += buffer.substr(0, remaining);
 

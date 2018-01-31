@@ -24,22 +24,22 @@ namespace resply {
 
         /*! \brief Holds the response of a redis command. */
         struct Result {
-                Result() : type{Type::Nil} { }
-
                 /*! \brief Indicates the type of the response. */
                 enum class Type {
                         String,
                         Integer,
                         Array,
-                        ProtError,
+                        ProtocolError,
                         IOError,
                         Nil
                 };
 
+                Result() : type{Type::Nil} { }
+
                 /*! \brief Holds the type of the response. */
                 Type type;
 
-                /*! \brief Use when type is String, ProtError or IOError */
+                /*! \brief Use when type is String, ProtocolError or IOError */
                 std::string string;
 
                 /*! \brief Use when type is Integer */
@@ -51,7 +51,7 @@ namespace resply {
                 /*! \brief This outputs the stringify'd version of the response into the supplied stream.
                  *
                  *  It acts according to the #type field.
-                 *  If #type is either Type::ProtError or Type::IOError, "(error) " is
+                 *  If #type is either Type::ProtocolError or Type::IOError, "(error) " is
                  *  prepended to the error message. If #type is Type::Nil, the output is "(nil)".
                  */
                 friend std::ostream& operator<<(std::ostream& ostream, const Result& result);
