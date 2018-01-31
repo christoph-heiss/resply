@@ -23,6 +23,15 @@ bool is_number(const std::string& str) {
         return !str.empty() && std::all_of(str.begin(), str.end(), ::isdigit);
 }
 
+bool check_asio_error(asio::error_code& error_code)
+{
+        if (error_code) {
+                std::cerr << error_code.message() << std::endl;
+        }
+
+        return !!error_code;
+}
+
 }
 
 
@@ -124,15 +133,6 @@ public:
         }
 
 private:
-        static bool check_asio_error(asio::error_code& error_code)
-        {
-                if (error_code) {
-                        std::cerr << error_code.message() << std::endl;
-                }
-
-                return !!error_code;
-        }
-
         static void parse_response(Result& result, asio::streambuf& streambuf, size_t& remaining)
         {
                 std::string buffer{asio::buffers_begin(streambuf.data()),
