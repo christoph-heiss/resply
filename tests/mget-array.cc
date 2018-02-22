@@ -19,7 +19,6 @@ int main()
 
         auto result{client.command("mget", "a", "b", "c")};
 
-        std::cout << result << std::endl;
         return !(
                 result.type == resply::Result::Type::Array &&
                 result.array[0].type == resply::Result::Type::String && result.array[0].string == "1" &&
