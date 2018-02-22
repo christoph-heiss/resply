@@ -43,10 +43,7 @@ int main(int argc, char* argv[])
                 std::stringstream sstream;
                 sstream << client.command(command);
 
-                std::cout << sstream.str();
-                if (sstream.str().back() != '\n') {
-                        std::cout << std::endl;
-                }
+                std::cout << sstream.str() << std::endl;
         }
 
         client.close();
