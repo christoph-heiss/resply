@@ -35,6 +35,7 @@ namespace resply {
                 };
 
                 Result() : type{Type::Nil} { }
+                Result(long long integer) : type{Type::Integer}, integer{integer} { }
 
                 /*! \brief Holds the type of the response. */
                 Type type;

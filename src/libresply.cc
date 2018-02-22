@@ -118,122 +118,22 @@ public:
                 asio::write(socket_, asio::buffer(command), error_code);
                 check_asio_error(error_code);
 
-                Result result;
+                RespParser parser;
                 asio::streambuf buffer;
-                size_t remaining{};
+                bool cont{false};
 
                 do {
-                        asio::read(socket_, buffer, error_code);
+                        buffer.consume(buffer.size());
+                        asio::read_until(socket_, buffer, '\n');
                         check_asio_error(error_code);
+                        std::istream stream{&buffer};
+                        cont = parser.parse(stream);
+                } while (cont);
 
-                        parse_response(result, buffer, remaining);
-                } while (remaining);
-
-                return result;
+                return parser.result();
         }
 
 private:
-        static void parse_response(Result& result, asio::streambuf& streambuf, size_t& remaining)
-        {
-                std::string buffer{asio::buffers_begin(streambuf.data()),
-                                   asio::buffers_end(streambuf.data())};
-
-                if (!remaining) {
-                        // First pass
-                        parse_type(result, buffer, remaining);
-                } else {
-                        // All other
-                        continue_parse_type(result, buffer, remaining);
-                }
-
-                streambuf.consume(streambuf.size());
-        }
-
-        static void parse_type(Result& result, const std::string& buffer, size_t& remaining)
-        {
-                switch (buffer.front()) {
-                case '+':
-                        result.type = Result::Type::String;
-                        // Exclude the final \r\n bytes
-                        result.string += buffer.substr(1, buffer.length() - 3);
-
-                        break;
-
-
-                case '-':
-                        result.type = Result::Type::ProtocolError;
-                        // Exclude the final \r\n bytes
-                        result.string += buffer.substr(1, buffer.length() - 3);
-
-                        break;
-
-                case ':':
-                        result.type = Result::Type::Integer;
-                        result.integer = std::stoll(buffer.substr(1));
-
-                        break;
-
-                case '$': {
-                        size_t size;
-                        long length{std::stol(buffer.substr(1), &size)};
-
-                        if (length == -1) {
-                                result.type = Result::Type::Nil;
-                                break;
-                        }
-
-                        result.type = Result::Type::String;
-                        if (static_cast<size_t>(length) < buffer.length()) {
-                                result.string += buffer.substr(size + 3, buffer.length() - size - 3);
-                        } else {
-                                result.string += buffer.substr(size + 3);
-                                remaining = length - result.string.length();
-                        }
-
-                        break;
-                }
-                case '*': {
-                        size_t size;
-                        long length{std::stol(buffer.substr(1), &size)};
-
-                        if (length == -1) {
-                                result.type = Result::Type::Nil;
-                                break;
-                        }
-
-                        result.type = Result::Type::Array;
-                        remaining = length;
-
-                        while (remaining) {
-
-                        }
-
-                        break;
-                }
-                default:
-                        // Error
-                        break;
-                }
-        }
-
-        static void continue_parse_type(Result& result, const std::string& buffer, size_t& remaining)
-        {
-                switch (result.type) {
-                case Result::Type::String:
-                case Result::Type::ProtocolError:
-                case Result::Type::IOError:
-                        result.string += buffer.substr(0, remaining);
-
-                        if (remaining == buffer.length() - 2) {
-                                remaining = 0;
-                        } else {
-                                remaining -= buffer.length();
-                        }
-                default:
-                        break;
-                }
-        }
-
         const std::string host_;
         const std::string port_;
         const size_t timeout_;
