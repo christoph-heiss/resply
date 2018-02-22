@@ -74,7 +74,7 @@ namespace resply {
                  *                 The ":port" component may be omitted, in which case it defaults to "6379".
                  *  \param timeout Timeout in milliseconds when connecting to server. Default are 500ms.
                  */
-                Client(const std::string& address, size_t timeout=500);
+                explicit Client(const std::string& address, size_t timeout=500);
 
                  /*! \brief Constructs a new redis client.
                   *  \param host Redis server address.
