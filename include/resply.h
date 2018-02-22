@@ -140,8 +140,7 @@ namespace resply {
                           typename... ArgTypes>
                 Result command(std::stringstream& builder, T num, ArgTypes... args)
                 {
-                        builder << ':' << num << "\r\n";
-                        return command(builder, args...);
+                        command(builder, std::to_string(num), args...);
                 }
 
                 /*! \brief Specializtion of #command for ending recursion. */

@@ -6,7 +6,6 @@
 // or copy at http://www.boost.org/LICENSE_1_0.txt
 //
 
-#include <cstdlib>
 #include <sstream>
 #include <cctype>
 #include <algorithm>
@@ -15,13 +14,10 @@
 #include <asio.hpp>
 
 #include "resply.h"
+#include "resp-parser.h"
 
 
 namespace {
-
-bool is_number(const std::string& str) {
-        return !str.empty() && std::all_of(str.begin(), str.end(), ::isdigit);
-}
 
 bool check_asio_error(asio::error_code& error_code)
 {
@@ -284,11 +280,7 @@ Result Client::command(const std::vector<std::string>& str)
         builder << '*' << str.size() << "\r\n";
 
         for (const std::string& part: str) {
-                if (is_number(part)) {
-                        builder << ':' << part << "\r\n";
-                } else {
-                        builder << '$' << part.length() << "\r\n" << part << "\r\n";
-                }
+                builder << '$' << part.length() << "\r\n" << part << "\r\n";
         }
 
         return impl_->command(builder.str());
