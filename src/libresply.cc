@@ -66,8 +66,12 @@ std::ostream& operator<<(std::ostream& ostream, const Result& result)
                 break;
 
         case Result::Type::Array:
-                for (const auto& res: result.array) {
-                        ostream << res;
+                for (size_t i{}; i < result.array.size(); i++) {
+                        ostream << i+1 << ") " << result.array[i];
+
+                        if (i != result.array.size()-1) {
+                                ostream << '\n';
+                        }
                 }
 
                 break;
