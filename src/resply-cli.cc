@@ -40,10 +40,10 @@ int main(int argc, char* argv[])
                         command.push_back(line);
                 }
 
-                std::stringstream sstream;
-                sstream << client.command(command);
+                std::stringstream stream;
+                stream << client.command(command);
 
-                std::cout << sstream.str() << std::endl;
+                std::cout << stream.str() << std::endl;
         }
 
         client.close();

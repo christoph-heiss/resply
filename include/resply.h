@@ -34,7 +34,12 @@ namespace resply {
                         Nil
                 };
 
+                /*! \brief Constructs a new (empty) nil-result. */
                 Result() : type{Type::Nil} { }
+
+                /*! \brief Constructs  a new integer-result.
+                 *  \param integer The value of the result.
+                 */
                 Result(long long integer) : type{Type::Integer}, integer{integer} { }
 
                 /*! \brief Holds the type of the response. */

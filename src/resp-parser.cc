@@ -66,7 +66,7 @@ bool RespParser::parse(std::istream& stream)
                 state_ = State::Finished;
         }
 
-        return remaining_bytes_ <= 0 || remaining_elements_ ? false : state_ != State::Finished;
+        return state_ != State::Finished;
 }
 
 

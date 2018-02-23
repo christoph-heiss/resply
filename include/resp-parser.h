@@ -21,7 +21,7 @@ class RespParser {
 public:
         RespParser()
                 : state_{State::NeedType}, remaining_bytes_{READ_UNTIL_EOL},
-                  remaining_elements_{0}
+                  remaining_elements_{}
         { }
 
         /*! \brief Does the actual parsing of the data.
