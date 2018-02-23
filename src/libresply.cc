@@ -79,6 +79,8 @@ std::ostream& operator<<(std::ostream& ostream, const Result& result)
 
 class ClientImpl {
 public:
+        friend class Client;
+
         ClientImpl(const std::string& host, const std::string& port, size_t timeout)
                 : host_{host}, port_{port}, timeout_{timeout}, socket_{io_context_}
         {
@@ -170,25 +172,49 @@ Client::~Client() { }
 void Client::connect() { impl_->connect(); }
 void Client::close() { impl_->close(); }
 
-Result Client::command(const std::vector<std::string>& str)
+Result Client::finish_command(const std::string& command)
 {
-        if (str.empty()) {
-                return {};
-        }
-
-        std::stringstream builder;
-        builder << '*' << str.size() << "\r\n";
-
-        for (const std::string& part: str) {
-                builder << '$' << part.length() << "\r\n" << part << "\r\n";
-        }
-
-        return impl_->command(builder.str());
+       return command.empty() ? Result{} : impl_->command(command);
 }
 
-Result Client::command(const std::stringstream& builder)
+std::vector<Result> Client::Pipeline::send()
 {
-       return impl_->command(builder.str());
+        asio::error_code error_code;
+
+        asio::write(client_.impl_->socket_, asio::buffer(commands_), error_code);
+        check_asio_error(error_code);
+
+        std::vector<Result> results;
+        asio::streambuf buffer;
+
+        for (size_t i{}; i < num_commands_; i++) {
+                RespParser parser;
+                bool cont{false};
+
+                do {
+                        if (!buffer.size()) {
+                                asio::read_until(client_.impl_->socket_, buffer, '\n');
+                                check_asio_error(error_code);
+                        }
+                        std::istream stream{&buffer};
+                        cont = parser.parse(stream);
+                } while (cont);
+
+                results.push_back(std::move(parser.result()));
+        }
+
+        commands_.clear();
+        return results;
+}
+
+Client::Pipeline& Client::Pipeline::finish_command(const std::string& command)
+{
+        if (!command.empty()) {
+                commands_ += command + "\r\n";
+                num_commands_++;
+        }
+
+        return *this;
 }
 
 }

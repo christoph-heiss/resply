@@ -64,14 +64,132 @@ namespace resply {
         };
 
 
+        /*! \brief Implements a template-based RESP command serializer.
+         *  \param R Return type for #command.
+         */
+        template <typename R>
+        class RespCommandSerializer {
+        public:
+                /*! \brief Serializes a command and its parameters.
+                 *  \param str List of command name and its parameters.
+                 *  \return \p R
+                 *
+                 *  The command and parameters are automatically converted to RESP
+                 *  as specificed at <https://redis.io/topics/protocol>.
+                 */
+                R command(const std::vector<std::string>& str)
+                {
+                        std::stringstream builder;
+
+                        if (str.empty()) {
+                                return command(builder);
+                        }
+
+                        builder << '*' << str.size() << "\r\n";
+
+                        for (const std::string& part: str) {
+                                builder << '$' << part.length() << "\r\n" << part << "\r\n";
+                        }
+
+                        return command(builder);
+                }
+
+                /*! \brief Serializes a command and its parameters.
+                 *  \param str The name of the command.
+                 *  \param args A series of command arguments.
+                 *  \return \p R
+                 *
+                 *  The command and parameters are automatically converted to RESP
+                 *  as specificed at <https://redis.io/topics/protocol>.
+                 */
+                template <typename... ArgTypes>
+                R command(const std::string& str, ArgTypes... args)
+                {
+                        std::stringstream builder;
+
+                        if (str.empty()) {
+                                return command(builder);
+                        }
+
+                        builder << '*' << sizeof...(ArgTypes) + 1 << "\r\n";
+                        return command(builder, str, args...);
+                }
+
+        private:
+                /*! \brief String-specialization variant of #command. */
+                template <typename... ArgTypes>
+                R command(std::stringstream& builder, const std::string& str, ArgTypes... args)
+                {
+                        builder << '$' << str.length() << "\r\n" << str << "\r\n";
+                        return command(builder, args...);
+                }
+
+                /*! \brief Number-specialization variant of #command. */
+                template <typename T,
+                          typename = typename std::enable_if<std::is_integral<T>::value, T>::type,
+                          typename... ArgTypes>
+                R command(std::stringstream& builder, T num, ArgTypes... args)
+                {
+                        return command(builder, std::to_string(num), args...);
+                }
+
+                /*! \brief Specialization of #command for ending recursion. */
+                R command(const std::stringstream& builder)
+                {
+                        return finish_command(builder.str());
+                }
+
+        protected:
+                /*! \brief Finishes a commmand. Semantics depend on derived class.
+                 *  \param command The serialized command.
+                 *  \return \p R
+                 *
+                 *  This method must be implemented by the derived class.
+                 */
+                virtual R finish_command(const std::string& command) = 0;
+        };
+
         class ClientImpl;
 
         /*! \brief Redis client interface
          *
          *  This class implements the RESP to communicate with a redis server.
          */
-        class Client {
+        class Client : public RespCommandSerializer<Result> {
         public:
+                /*! \brief A pipelined redis client. */
+                class Pipeline : public RespCommandSerializer<Pipeline&> {
+                public:
+                        /*! \brief Constructs a new pipelined client.
+                         *  \param client A connected redis client.
+                         */
+                        Pipeline(Client& client) : client_{client}, num_commands_{} { }
+
+                        /*! \brief Sends the batch of commands to the server.
+                         *  \return The results of the commands.
+                         */
+                        std::vector<Result> send();
+
+                private:
+                        /*! \brief Adds the command to the batch.
+                         *  \param command Command to add.
+                         *  \return The pipelined client.
+                         */
+                        Pipeline& finish_command(const std::string& command) override;
+
+                        /*! \brief Redis client connection this pipeline will use. */
+                        Client& client_;
+
+                        /*! \brief The batch of commands to send. */
+                        std::string commands_;
+
+                        /*! \brief Number of commands in the batch. */
+                        size_t num_commands_;
+                };
+
+                /*! \brief Represents a pipelined redis client. */
+                friend class Pipeline;
+
                 /*! \brief Constructs a new redis client which connects to localhost:6379. */
                 Client();
 
@@ -101,57 +219,21 @@ namespace resply {
                  */
                 void close();
 
-                /*! \brief Send a command to the server.
-                 *  \param str List of command name and its parameters.
-                 *  \return The result of the command.
-                 *
-                 *  The command and parameters are automatically converted to RESP
-                 *  as specificed at <https://redis.io/topics/protocol>.
+                /*! \brief Creates a new pipelined client using this client.
+                 *  \return A pipelined client.
                  */
-                Result command(const std::vector<std::string>& str);
-
-                /*! \brief Send a command to the server.
-                 *  \param str The name of the command.
-                 *  \param args A series of command arguments.
-                 *  \return The result of the command.
-                 *
-                 *  The command and parameters are automatically converted to RESP
-                 *  as specificed at <https://redis.io/topics/protocol>.
-                 */
-                template <typename... ArgTypes>
-                Result command(const std::string& str, ArgTypes... args)
-                {
-                        if (str.empty()) {
-                                return {};
-                        }
-
-                        std::stringstream builder;
-
-                        builder << '*' << sizeof...(ArgTypes) + 1 << "\r\n";
-                        return command(builder, str, args...);
+                Pipeline pipelined() {
+                        return Pipeline(*this);
                 }
 
         private:
-                /*! \brief String-specialization variant of #command. */
-                template <typename... ArgTypes>
-                Result command(std::stringstream& builder, const std::string& str, ArgTypes... args)
-                {
-                        builder << '$' << str.length() << "\r\n" << str << "\r\n";
-                        return command(builder, args...);
-                }
+                /*! \brief Sends the command to the server.
+                 *  \param command The command to send.
+                 *  \return The result of the command.
+                 */
+                Result finish_command(const std::string& command) override;
 
-                /*! \brief Number-specialization variant of #command. */
-                template <typename T,
-                          typename = typename std::enable_if<std::is_integral<T>::value, T>::type,
-                          typename... ArgTypes>
-                Result command(std::stringstream& builder, T num, ArgTypes... args)
-                {
-                        return command(builder, std::to_string(num), args...);
-                }
-
-                /*! \brief Specializtion of #command for ending recursion. */
-                Result command(const std::stringstream& builder);
-
+                /*! \brief Internal client implementation. */
                 std::unique_ptr<ClientImpl> impl_;
         };
 }
