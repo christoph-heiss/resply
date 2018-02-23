@@ -49,19 +49,32 @@ private:
         /*! \brief The response was either a Simple String or Error - which means reading until CRLF */
         const long READ_UNTIL_EOL = -1;
 
-        /*! \brief Sets the parser state according to the type for further parsing. */
+        /*! \brief Sets the parser state according to \p type for further parsing. */
         void parse_type(char type);
+
+        /*! \brief Sets the type of \p result accordingly to \p type. */
         void parse_type(char type, resply::Result& result);
 
-        /*! \brief Sets #state_ and #remaining_ accordingly for further parsing. */
+        /*! \brief Sets #state_ and #remaining_bytes_ (or #remaining_elements_)
+         *         accordingly for further parsing.
+         */
         void parse_size(const std::string& buffer);
 
         /*! \brief Consume data and puts them into the result. */
         void parse_data(const std::string& buffer);
 
+        /*! \brief Holds the final (and intermediate) result. */
         resply::Result result_;
+
+        /*! \brief Indicates the currrent parser state. */
         State state_;
+
+        /*! \brief Holds how many bytes must still be read to complete this element. */
         long remaining_bytes_;
+
+        /*! \brief This indicates the rememaining array elements to be read if
+         *          the response is an array.
+         */
         long remaining_elements_;
 };
 
