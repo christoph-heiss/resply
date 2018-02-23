@@ -10,6 +10,7 @@
 #include <cctype>
 #include <algorithm>
 #include <iostream>
+#include <numeric>
 
 #include <asio.hpp>
 
@@ -113,7 +114,7 @@ public:
         }
 
 
-        Result command(const std::string& command)
+        Result send(const std::string& command)
         {
                 asio::error_code error_code;
 
@@ -133,6 +134,38 @@ public:
                 } while (cont);
 
                 return parser.result();
+        }
+
+        std::vector<Result> send_batch(const std::vector<std::string>& commands)
+        {
+                asio::error_code error_code;
+                const std::string raw_commands{
+                        std::accumulate(commands.cbegin(), commands.cend(), std::string{})
+                };
+
+                asio::write(socket_, asio::buffer(raw_commands), error_code);
+                check_asio_error(error_code);
+
+                std::vector<Result> results;
+                asio::streambuf buffer;
+
+                for (size_t i{}; i < commands.size(); i++) {
+                        RespParser parser;
+                        bool cont{false};
+
+                        do {
+                                if (!buffer.size()) {
+                                        asio::read_until(socket_, buffer, '\n');
+                                        check_asio_error(error_code);
+                                }
+                                std::istream stream{&buffer};
+                                cont = parser.parse(stream);
+                        } while (cont);
+
+                        results.push_back(std::move(parser.result()));
+                }
+
+                return results;
         }
 
 private:
@@ -174,34 +207,16 @@ void Client::close() { impl_->close(); }
 
 Result Client::finish_command(const std::string& command)
 {
-       return command.empty() ? Result{} : impl_->command(command);
+       return command.empty() ? Result{} : impl_->send(command);
 }
 
 std::vector<Result> Client::Pipeline::send()
 {
-        asio::error_code error_code;
-
-        asio::write(client_.impl_->socket_, asio::buffer(commands_), error_code);
-        check_asio_error(error_code);
-
-        std::vector<Result> results;
-        asio::streambuf buffer;
-
-        for (size_t i{}; i < num_commands_; i++) {
-                RespParser parser;
-                bool cont{false};
-
-                do {
-                        if (!buffer.size()) {
-                                asio::read_until(client_.impl_->socket_, buffer, '\n');
-                                check_asio_error(error_code);
-                        }
-                        std::istream stream{&buffer};
-                        cont = parser.parse(stream);
-                } while (cont);
-
-                results.push_back(std::move(parser.result()));
+        if (commands_.empty()) {
+                return {};
         }
+
+        auto results = client_.impl_->send_batch(commands_);
 
         commands_.clear();
         return results;
@@ -210,8 +225,7 @@ std::vector<Result> Client::Pipeline::send()
 Client::Pipeline& Client::Pipeline::finish_command(const std::string& command)
 {
         if (!command.empty()) {
-                commands_ += command + "\r\n";
-                num_commands_++;
+                commands_.emplace_back(command + "\r\n");
         }
 
         return *this;

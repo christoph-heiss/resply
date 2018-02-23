@@ -163,7 +163,7 @@ namespace resply {
                         /*! \brief Constructs a new pipelined client.
                          *  \param client A connected redis client.
                          */
-                        Pipeline(Client& client) : client_{client}, num_commands_{} { }
+                        Pipeline(Client& client) : client_{client} { }
 
                         /*! \brief Sends the batch of commands to the server.
                          *  \return The results of the commands.
@@ -181,10 +181,7 @@ namespace resply {
                         Client& client_;
 
                         /*! \brief The batch of commands to send. */
-                        std::string commands_;
-
-                        /*! \brief Number of commands in the batch. */
-                        size_t num_commands_;
+                        std::vector<std::string> commands_;
                 };
 
                 /*! \brief Represents a pipelined redis client. */
