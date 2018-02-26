@@ -4,10 +4,6 @@ project(resply VERSION 0.1.0 DESCRIPTION "Modern redis client for C++")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (POLICY CMP0025)
-        cmake_policy(SET CMP0025 NEW)
-endif ()
-
 option(BUILD_DOC "Build documentation using doxygen" ON)
 
 add_definitions(-DASIO_STANDALONE)
@@ -23,17 +19,17 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 include_directories(include)
 
 # https://github.com/chriskohlhoff/asio
-include_directories(ASIO_INCLUDE_PATH)
+include_directories($ENV{ASIO_INCLUDE_PATH})
 
 # https://github.com/nlohmann/json
 # should refer to the directory 'src' of json
-include_directories(JSON_INCLUDE_PATH)
+include_directories($ENV{JSON_INCLUDE_PATH})
 
 # https://github.com/muellan/clipp
-include_directories(CLIPP_INCLUDE_PATH)
+include_directories($ENV{CLIPP_INCLUDE_PATH})
 
 # https://github.com/gabime/spdlog
-include_directories(SPDLOG_INCLUDE_PATH)
+include_directories($ENV{SPDLOG_INCLUDE_PATH})
 
 
 # protobuf
