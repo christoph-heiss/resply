@@ -45,6 +45,10 @@ int main(int argc, char* argv[])
 
                 std::string line;
                 std::getline(std::cin, line);
+
+                if (!line.length()) {
+                        continue;
+                }
                 std::stringstream linestream{line};
 
                 std::vector<std::string> command;
