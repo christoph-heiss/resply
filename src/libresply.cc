@@ -51,7 +51,7 @@ std::ostream& operator<<(std::ostream& ostream, const Result& result)
                 [[fallthrough]];
 
         case Result::Type::String:
-                ostream << result.string;
+                ostream << '"' << result.string << '"';
                 break;
 
         case Result::Type::Integer:
