@@ -121,19 +121,7 @@ public:
                 asio::write(socket_, asio::buffer(command), error_code);
                 check_asio_error(error_code);
 
-                RespParser parser;
-                asio::streambuf buffer;
-                bool cont{false};
-
-                do {
-                        buffer.consume(buffer.size());
-                        asio::read_until(socket_, buffer, '\n');
-                        check_asio_error(error_code);
-                        std::istream stream{&buffer};
-                        cont = parser.parse(stream);
-                } while (cont);
-
-                return parser.result();
+                return receive_response();
         }
 
         std::vector<Result> send_batch(const std::vector<std::string>& commands)
@@ -146,10 +134,22 @@ public:
                 asio::write(socket_, asio::buffer(raw_commands), error_code);
                 check_asio_error(error_code);
 
-                std::vector<Result> results;
-                asio::streambuf buffer;
+                return receive_responses(commands.size());
+        }
 
-                for (size_t i{}; i < commands.size(); i++) {
+private:
+        Result receive_response()
+        {
+                return receive_responses(1).front();
+        }
+
+        std::vector<Result> receive_responses(size_t num)
+        {
+                asio::error_code error_code;
+                asio::streambuf buffer;
+                std::vector<Result> results;
+
+                for (size_t i{}; i < num; i++) {
                         RespParser parser;
                         bool cont{false};
 
@@ -162,13 +162,12 @@ public:
                                 cont = parser.parse(stream);
                         } while (cont);
 
-                        results.push_back(std::move(parser.result()));
+                        results.push_back(parser.result());
                 }
 
                 return results;
         }
 
-private:
         const std::string host_;
         const std::string port_;
         const size_t timeout_;
