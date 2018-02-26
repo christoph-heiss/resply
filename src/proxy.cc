@@ -22,6 +22,8 @@
 
 using json = nlohmann::json;
 
+const std::string LOGGER_NAME{"proxy-log"};
+
 
 struct Options {
         Options() :
@@ -80,8 +82,10 @@ static void clean_up()
 }
 
 
-static json read_config_file(std::shared_ptr<spdlog::logger> logger, const std::string& path)
+static json read_config_file(const std::string& path)
 {
+        auto logger{spdlog::get(LOGGER_NAME)};
+
         if (!path.length()) {
                 return {};
         }
@@ -100,9 +104,11 @@ static json read_config_file(std::shared_ptr<spdlog::logger> logger, const std::
 }
 
 
-static void daemonize_process(std::shared_ptr<spdlog::logger> logger)
+static void daemonize_process()
 {
-         pid_t pid{::fork()};
+        auto logger{spdlog::get(LOGGER_NAME)};
+
+        pid_t pid{::fork()};
 
         if (pid < 0) {
                 logger->error("Could not fork process, reason: {}", ::strerror(errno));
@@ -148,17 +154,19 @@ int main(int argc, char* argv[])
         std::atexit(clean_up);
 
         auto options{parse_commandline(argc, argv)};
-        auto logger{spdlog::stdout_color_mt("proxy-log")};
+        auto logger{spdlog::stdout_color_mt(LOGGER_NAME)};
         logger->flush_on(spdlog::level::warn);
 
-        json config{read_config_file(logger, options.config_path)};
+        json config{read_config_file(options.config_path)};
 
         if (options.daemonize) {
                 logger->info("Daemonizing server, logfile: {}", options.log_path);
-                daemonize_process(logger);
+                daemonize_process();
                 // The parent process has exited already.
 
-                logger = spdlog::rotating_logger_mt("proxy-rot-log", options.log_path,
+                // Drop the console logger and create a rotating file logger.
+                spdlog::drop(LOGGER_NAME);
+                logger = spdlog::rotating_logger_mt(LOGGER_NAME, options.log_path,
                                                     1048576 * 10, 10);
                 logger->flush_on(spdlog::level::warn);
         }
@@ -174,6 +182,5 @@ int main(int argc, char* argv[])
         }
 
         logger->info("Shutting down.");
-
         return 0;
 }
