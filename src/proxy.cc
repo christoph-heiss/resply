@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdlib>
+#include <csignal>
 
 #include "clipp.h"
 #include "spdlog/spdlog.h"
@@ -33,6 +34,9 @@ struct Options {
         std::string port;
         std::string remote_host;
 };
+
+
+static std::sig_atomic_t shutdown_server;
 
 
 static Options parse_commandline(int argc, char** argv)
@@ -125,11 +129,24 @@ static void daemonize_process(std::shared_ptr<spdlog::logger> logger)
 }
 
 
+static void install_signal_handler()
+{
+        auto action = [](int) {
+                shutdown_server = true;
+        };
+
+        std::signal(SIGTERM, action);
+        std::signal(SIGINT, action);
+}
+
+
+#include <chrono>
+#include <thread>
 int main(int argc, char* argv[])
 {
+        GOOGLE_PROTOBUF_VERIFY_VERSION;
         std::atexit(clean_up);
 
-        GOOGLE_PROTOBUF_VERIFY_VERSION;
         auto options{parse_commandline(argc, argv)};
         auto logger{spdlog::stdout_color_mt("proxy-log")};
         logger->flush_on(spdlog::level::warn);
@@ -146,8 +163,17 @@ int main(int argc, char* argv[])
                 logger->flush_on(spdlog::level::warn);
         }
 
+        install_signal_handler();
+
         for (;;) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                if (shutdown_server) {
+                        break;
+                }
         }
+
+        logger->info("Shutting down.");
 
         return 0;
 }
