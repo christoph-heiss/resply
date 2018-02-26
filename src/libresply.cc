@@ -158,6 +158,16 @@ public:
                 return channel_callbacks_;
         }
 
+        const std::string& host() const
+        {
+                return host_;
+        }
+
+        const std::string& port() const
+        {
+                return port_;
+        }
+
 private:
         Result receive_response()
         {
@@ -227,6 +237,8 @@ Client::~Client() { }
 
 void Client::connect() { impl_->connect(); }
 void Client::close() { impl_->close(); }
+const std::string& Client::host() const { return impl_->host(); }
+const std::string& Client::port() const { return impl_->port(); }
 
 bool Client::in_subscribed_mode() const
 {

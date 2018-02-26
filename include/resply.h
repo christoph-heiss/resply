@@ -222,6 +222,16 @@ namespace resply {
                  */
                 void close();
 
+                /*! \brief Retrieves the address of the server this client is connected to.
+                 *  \return The server address of the redis server.
+                 */
+                const std::string& host() const;
+
+                /*! \brief Retrieves the port of the server this client is connected to.
+                 *  \return The server port of the redis server.
+                 */
+                const std::string& port() const;
+
                 /*! \brief Creates a new pipelined client using this client.
                  *  \return A pipelined client.
                  */

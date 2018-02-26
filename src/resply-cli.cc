@@ -17,10 +17,9 @@
 
 
 struct Options {
-        Options() : host{"localhost"}, port{"6379"}, show_version{} { }
+        Options() : host{"localhost:6379"}, show_version{} { }
 
         std::string host;
-        std::string port;
         bool show_version;
 };
 
@@ -32,9 +31,7 @@ static Options parse_commandline(int argc, char** argv)
 
         auto cli = (
                 clipp::option("-h", "--host").set(options.host)
-                                             .doc("Set the host to connect to [default: localhost]"),
-                clipp::option("-p", "--port").set(options.port)
-                                             .doc("Set the port to connect to [default: 6379]"),
+                        .doc("Set the host (and port, optional) to connect to [default: localhost:6379]"),
                 clipp::option("--help").set(show_help).doc("Show help and exit."),
                 clipp::option("--version").set(options.show_version).doc("Show version and exit.")
         );
@@ -69,11 +66,11 @@ int main(int argc, char* argv[])
 {
         auto options{parse_commandline(argc, argv)};
 
-        resply::Client client{options.host, options.port};
+        resply::Client client{options.host};
         client.connect();
 
         while (std::cin) {
-                std::cout << options.host << ':' << options.port << "> ";
+                std::cout << client.host() << ':' << client.port() << "> ";
 
                 std::string line;
                 std::getline(std::cin, line);
