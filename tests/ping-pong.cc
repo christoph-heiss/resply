@@ -14,8 +14,7 @@ int main()
         resply::Client client;
         client.connect();
 
-        std::stringstream stream;
-        stream << client.command("ping");
+        auto result{client.command("ping")};
 
-        return stream.str() != "PONG";
+        return !(result.type == resply::Result::Type::String && result.string == "PONG");
 }
