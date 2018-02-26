@@ -60,6 +60,7 @@ namespace resply {
                 std::vector<Result> array;
 
                 /*! \brief This outputs the stringify'd version of the response into the supplied stream.
+                 *  \return Reference to the stream.
                  *
                  *  It acts according to the #type field.
                  *  If #type is either Type::ProtocolError or Type::IOError, "(error) " is
@@ -229,6 +230,7 @@ namespace resply {
                 }
 
                 /*! \brief Indicates if the client is currently subscribed to any channels.
+                 *  \return If the client is in subscription-mode.
                  *
                  *  If this returns true, the server will reject any command other than
                  *    UNSUBSCRIBE, PUNSUBSCRIBE, PING and QUIT.
