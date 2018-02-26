@@ -28,12 +28,12 @@ const std::string LOGGER_NAME{"proxy-log"};
 struct Options {
         Options() :
                 config_path{".proxy-conf.json"}, daemonize{}, log_path{"proxy.log"},
-                port{"6543"}, remote_host{"localhost:6379"} { }
+                port{6543}, remote_host{"localhost:6379"} { }
 
         std::string config_path;
         bool daemonize;
         std::string log_path;
-        std::string port;
+        unsigned short port;
         std::string remote_host;
 };
 
@@ -61,7 +61,9 @@ static Options parse_commandline(int argc, char** argv)
         );
 
         if (!clipp::parse(argc, argv, cli) || show_help) {
-                std::cout << clipp::make_man_page(cli, argv[0]) << std::endl;
+                std::cout << clipp::make_man_page(cli, argv[0])
+                                .append_section("NOTES", "\tCommand line parameter overwrite values in the configuration file.")
+                          << std::endl;
                 std::exit(0);
         }
 
