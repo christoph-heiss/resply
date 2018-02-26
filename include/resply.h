@@ -15,9 +15,14 @@
 #include <sstream>
 #include <type_traits>
 #include <iostream>
+#include <functional>
 
 
 namespace resply {
+        /*! \brief Function signature for channel callbacks. */
+        typedef std::function<void(const std::string& channel, const std::string& message)> ChannelCallback;
+
+
         /*! \return The version of the resply library. */
         const std::string& version();
 
@@ -222,6 +227,41 @@ namespace resply {
                 Pipeline pipelined() {
                         return Pipeline(*this);
                 }
+
+                /*! \brief Indicates if the client is currently subscribed to any channels.
+                 *
+                 *  If this returns true, the server will reject any command other than
+                 *    UNSUBSCRIBE, PUNSUBSCRIBE, PING and QUIT.
+                 *  For SUBSCRIBE and PSUBSCRIBE functionality use #subscribe and #psubscribe,
+                 *    respectivly.
+                 *  Only after unsubscribing to all channels, the client will return
+                 *    to normal mode.
+                 *
+                 *  For more information regarding the pub/sub mechanism, look here:
+                 *    <https://redis.io/topics/pubsub>
+                 */
+                bool in_subscribed_mode() const;
+
+                /*! \brief Subscribes to a channel.
+                 *  \param channel Name of the channel to subscribe to.
+                 *  \param callback Callback for messages on this channel.
+                 *  \return The client.
+                 */
+                Client& subscribe(const std::string& channel, ChannelCallback callback);
+
+                /*! \brief Subscribes to multiple channels based on a pattern.
+                 *  \param pattern Pattern of the channels to subscribe to.
+                 *  \param callback Callback for messages on the channels.
+                 *  \return The client.
+                 */
+                Client& psubscribe(const std::string& pattern, ChannelCallback callback);
+
+                /*! \brief Puts the client into subscribed mode.
+                 *
+                 *  This method will not return until the client has been unsubscribed
+                 *  from all channels.
+                 */
+                void listen_for_messages();
 
         private:
                 /*! \brief Sends the command to the server.

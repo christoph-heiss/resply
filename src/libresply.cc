@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <unordered_map>
+#include <cctype>
 
 #include <asio.hpp>
 
@@ -137,6 +139,25 @@ public:
                 return receive_responses(commands.size());
         }
 
+        void listen_for_messages()
+        {
+                for (;;) {
+                        Result result{receive_response()};
+
+                        std::string& channel = result.array[1].string;
+                        std::string& message = result.array[2].string;
+
+                        if (channel_callbacks_.count(channel)) {
+                                channel_callbacks_[channel](channel, message);
+                        }
+                }
+        }
+
+        std::unordered_map<std::string, ChannelCallback>& channel_callbacks()
+        {
+                return channel_callbacks_;
+        }
+
 private:
         Result receive_response()
         {
@@ -174,6 +195,9 @@ private:
 
         asio::io_context io_context_;
         asio::ip::tcp::socket socket_;
+
+        std::unordered_map<std::string, ChannelCallback> channel_callbacks_;
+
 };
 
 
@@ -204,9 +228,35 @@ Client::~Client() { }
 void Client::connect() { impl_->connect(); }
 void Client::close() { impl_->close(); }
 
+bool Client::in_subscribed_mode() const
+{
+        return impl_->channel_callbacks().size();
+}
+
+Client& Client::subscribe(const std::string& channel, ChannelCallback callback)
+{
+        impl_->channel_callbacks()[channel] = callback;
+        command("subscribe", channel);
+
+        return *this;
+}
+
+Client& Client::psubscribe(const std::string& pattern, ChannelCallback callback)
+{
+        impl_->channel_callbacks()[pattern] = callback;
+        command("psubscribe", pattern);
+
+        return *this;
+}
+
 Result Client::finish_command(const std::string& command)
 {
-       return command.empty() ? Result{} : impl_->send(command);
+        return command.empty() ? Result{} : impl_->send(command);
+}
+
+void Client::listen_for_messages()
+{
+        impl_->listen_for_messages();
 }
 
 std::vector<Result> Client::Pipeline::send()

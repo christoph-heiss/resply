@@ -9,9 +9,21 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cctype>
+#include <algorithm>
 
 #include "cli-common.h"
 #include "resply.h"
+
+
+/* case-sensitive string comparison */
+static bool strcmp_icase(std::string str1, std::string str2)
+{
+        std::transform(str1.begin(), str1.end(), str1.begin(), ::tolower);
+        std::transform(str2.begin(), str2.end(), str2.begin(), ::tolower);
+
+        return str1 == str2;
+}
 
 
 int main(int argc, char* argv[])
@@ -44,6 +56,10 @@ int main(int argc, char* argv[])
                 stream << client.command(command);
 
                 std::cout << stream.str() << std::endl;
+
+                if (strcmp_icase(command.front(), "subscribe") || strcmp_icase(command.front(), "psubscribe")) {
+                        client.listen_for_messages();
+                }
         }
 
         client.close();
