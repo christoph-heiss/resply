@@ -33,13 +33,14 @@ const std::string LOGGER_NAME{"proxy-log"};
 struct Options {
         Options() :
                 config_path{".proxy-conf.json"}, daemonize{}, log_path{"proxy.log"},
-                port{6543}, remote_host{"localhost:6379"} { }
+                port{6543}, remote_host{"localhost:6379"}, verbose{} { }
 
         std::string config_path;
         bool daemonize;
         std::string log_path;
         unsigned short port;
         std::string remote_host;
+        bool verbose;
 };
 
 
@@ -58,6 +59,7 @@ static Options parse_commandline(int argc, char** argv)
                         .doc("Port to listen on [default: 6543]"),
                 clipp::option("-r", "--remote-host").set(options.remote_host)
                         .doc("Host (redis-server) to connect to [default: localhost:6379]"),
+                clipp::option("-v", "--verbose").set(options.verbose).doc("Enable verbose logging."),
                 clipp::option("--help").set(show_help).doc("Show help and exit."),
                 clipp::option("--version").set(show_version).doc("Show version and exit.")
         );
@@ -178,14 +180,12 @@ public:
                         uint32_t size;
                         auto size_buffer{asio::buffer(&size, 4)};
                         asio::read(socket_, size_buffer, asio::transfer_exactly(4), error_code);
-                        if (error_code)
-                                break;
+                        if (error_code) { break; }
 
                         std::string input(size, '\0');
                         auto input_buffer{asio::buffer(&input[0], size)};
                         asio::read(socket_, input_buffer, asio::transfer_exactly(size), error_code);
-                        if (error_code)
-                                break;
+                        if (error_code) { break; }
 
                         rslp::Command command;
                         command.ParseFromString(input);
@@ -194,7 +194,7 @@ public:
                                 std::string str{command.DebugString()};
                                 str.erase(std::remove_if(str.begin(), str.end(), ::isspace), str.end());
 
-                                logger_->trace("Received {}", str);
+                                logger_->debug("Received '{}' on {}", str, remote_address_);
                         }
                 }
 
@@ -245,13 +245,23 @@ static void listen_for_connections(const Options& options)
 }
 
 
+static void setup_logger(std::shared_ptr<spdlog::logger> logger, const Options& options)
+{
+        logger->flush_on(spdlog::level::warn);
+
+        if (options.verbose) {
+                logger->set_level(spdlog::level::debug);
+        }
+}
+
+
 int main(int argc, char* argv[])
 {
         GOOGLE_PROTOBUF_VERIFY_VERSION;
 
         auto options{parse_commandline(argc, argv)};
         auto logger{spdlog::stdout_color_mt(LOGGER_NAME)};
-        logger->flush_on(spdlog::level::warn);
+        setup_logger(logger, options);
 
         json config{read_config_file(options.config_path)};
 
@@ -264,7 +274,7 @@ int main(int argc, char* argv[])
                 spdlog::drop(LOGGER_NAME);
                 logger = spdlog::rotating_logger_mt(LOGGER_NAME, options.log_path,
                                                     1048576 * 10, 10);
-                logger->flush_on(spdlog::level::warn);
+                setup_logger(logger, options);
         }
 
         install_signal_handler();
