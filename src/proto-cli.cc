@@ -9,9 +9,12 @@
 #include <iostream>
 #include <string>
 
+#include "asio.hpp"
 #include "clipp.h"
 #include "rslp.pb.h"
 
+
+using namespace google;
 
 struct Options {
         Options() : host{"localhost"}, port{"6543"} { }
@@ -43,13 +46,52 @@ static Options parse_commandline(int argc, char** argv)
 }
 
 
+static bool connect_to_server(const Options& options, asio::ip::tcp::socket& socket)
+{
+        asio::io_context io_context;
+        asio::error_code error_code;
+        asio::ip::tcp::resolver resolver{io_context};
+
+        auto results = resolver.resolve(options.host, options.port, error_code);
+        if (error_code) {
+                std::cerr << "Error while connecting: " << error_code.message() << std::endl;
+                return false;
+        }
+
+        asio::connect(socket, results, error_code);
+        if (error_code) {
+                std::cerr << "Error while connecting: " << error_code.message() << std::endl;
+                return false;
+        }
+
+        return true;
+}
+
+
 int main(int argc, char* argv[])
 {
         GOOGLE_PROTOBUF_VERIFY_VERSION;
-
         auto options{parse_commandline(argc, argv)};
 
-        google::protobuf::ShutdownProtobufLibrary();
+        asio::io_context io_context;
+        asio::ip::tcp::socket socket{io_context};
+        if (!connect_to_server(options, socket)) {
+                return 1;
+        }
 
+        rslp::Command command;
+        command.set_type(rslp::Command::STRING);
+
+        auto* data{command.add_data()};
+        data->set_str("ping");
+
+        std::string output;
+        command.SerializeToString(&output);
+
+        uint32_t size{static_cast<uint32_t>(output.size())};
+        asio::write(socket, asio::buffer(&size, 4));
+        asio::write(socket, asio::buffer(output.data(), output.size()));
+
+        google::protobuf::ShutdownProtobufLibrary();
         return 0;
 }
