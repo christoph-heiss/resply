@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <csignal>
+#include <thread>
 
 #include "clipp.h"
 #include "spdlog/spdlog.h"
@@ -36,9 +37,6 @@ struct Options {
         unsigned short port;
         std::string remote_host;
 };
-
-
-static std::sig_atomic_t shutdown_server;
 
 
 static Options parse_commandline(int argc, char** argv)
@@ -80,6 +78,9 @@ static Options parse_commandline(int argc, char** argv)
 
 static void clean_up()
 {
+        spdlog::get(LOGGER_NAME)->info("Shutting down.");
+
+        spdlog::drop_all();
         google::protobuf::ShutdownProtobufLibrary();
 }
 
@@ -139,12 +140,19 @@ static void daemonize_process()
 
 static void install_signal_handler()
 {
-        auto action = [](int) {
-                shutdown_server = true;
-        };
+        std::thread{[&]() {
+                ::sigset_t sigset;
+                sigemptyset(&sigset);
+                sigaddset(&sigset, SIGTERM);
+                sigaddset(&sigset, SIGINT);
+                sigprocmask(SIG_BLOCK, &sigset, nullptr);
 
-        std::signal(SIGTERM, action);
-        std::signal(SIGINT, action);
+                int sig;
+                sigwait(&sigset, &sig);
+
+                clean_up();
+                std::exit(0);
+        }}.detach();
 }
 
 
@@ -153,7 +161,6 @@ static void install_signal_handler()
 int main(int argc, char* argv[])
 {
         GOOGLE_PROTOBUF_VERIFY_VERSION;
-        std::atexit(clean_up);
 
         auto options{parse_commandline(argc, argv)};
         auto logger{spdlog::stdout_color_mt(LOGGER_NAME)};
@@ -177,12 +184,7 @@ int main(int argc, char* argv[])
 
         for (;;) {
                 std::this_thread::sleep_for(std::chrono::seconds(1));
-
-                if (shutdown_server) {
-                        break;
-                }
         }
 
-        logger->info("Shutting down.");
         return 0;
 }
