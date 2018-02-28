@@ -10,10 +10,9 @@ add_definitions(-DASIO_STANDALONE)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic-errors -Werror -Wall -Wextra")
 
-# Exceptions are not used, asio is used with explicit error checking.
 # Apparently, protobuf uses __builtin_offsetof in a way which clang declares as
 # a extension to the language - gcc not. Disable that warning to get it to compile.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -Wno-extended-offsetof")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-extended-offsetof")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 
 include_directories(include)
