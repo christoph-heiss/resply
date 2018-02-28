@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <string>
+#include <arpa/inet.h>
 
 #include "asio.hpp"
 #include "clipp.h"
@@ -88,7 +89,7 @@ int main(int argc, char* argv[])
         std::string output;
         command.SerializeToString(&output);
 
-        uint32_t size{static_cast<uint32_t>(output.size())};
+        uint32_t size{htonl(static_cast<uint32_t>(output.size()))};
         asio::write(socket, asio::buffer(&size, 4));
         asio::write(socket, asio::buffer(output.data(), output.size()));
 

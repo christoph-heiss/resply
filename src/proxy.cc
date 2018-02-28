@@ -16,6 +16,7 @@
 #include <thread>
 #include <memory>
 #include <cctype>
+#include <arpa/inet.h>
 
 #include "asio.hpp"
 #include "clipp.h"
@@ -179,6 +180,8 @@ public:
                                 auto buffer{asio::buffer(&size, 4)};
                                 asio::read(socket_, buffer, asio::transfer_exactly(4), error_code);
                                 if (error_code) { break; }
+
+                                size = ntohl(size);
                         }
 
                         std::string data(size, '\0');
