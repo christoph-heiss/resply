@@ -27,6 +27,7 @@
 using json = nlohmann::json;
 using namespace google;
 
+
 const std::string LOGGER_NAME{"proxy-log"};
 
 
@@ -82,7 +83,7 @@ static Options parse_commandline(int argc, char** argv)
 }
 
 
-static void clean_up()
+static void cleanup()
 {
         spdlog::get(LOGGER_NAME)->info("Shutting down.");
 
@@ -91,25 +92,21 @@ static void clean_up()
 }
 
 
-static json read_config_file(const std::string& path)
+static void install_signal_handler()
 {
-        auto logger{spdlog::get(LOGGER_NAME)};
+        std::thread{[&]() {
+                ::sigset_t sigset;
+                sigemptyset(&sigset);
+                sigaddset(&sigset, SIGTERM);
+                sigaddset(&sigset, SIGINT);
+                sigprocmask(SIG_BLOCK, &sigset, nullptr);
 
-        if (!path.length()) {
-                return {};
-        }
+                int sig;
+                sigwait(&sigset, &sig);
 
-        std::ifstream config_file{path};
-        json config;
-
-        if (!config_file) {
-                logger->warn("Configuration file not found! Using compiled-in defaults ..");
-        } else {
-                config_file >> config;
-                config_file.close();
-        }
-
-        return config;
+                cleanup();
+                std::exit(0);
+        }}.detach();
 }
 
 
@@ -151,8 +148,8 @@ static void daemonize_process()
 
 class ProtobufRedisAdapter {
 public:
-        ProtobufRedisAdapter(const std::string& redis_host, asio::io_service& io_service) :
-                client_{redis_host}, socket_{io_service}, logger_{spdlog::get(LOGGER_NAME)}
+        ProtobufRedisAdapter(const std::string& redis_host, asio::io_context& io_context) :
+                client_{redis_host}, socket_{io_context}, logger_{spdlog::get(LOGGER_NAME)}
         { }
 
         ~ProtobufRedisAdapter()
@@ -178,17 +175,21 @@ public:
                         asio::error_code error_code;
 
                         uint32_t size;
-                        auto size_buffer{asio::buffer(&size, 4)};
-                        asio::read(socket_, size_buffer, asio::transfer_exactly(4), error_code);
-                        if (error_code) { break; }
+                        {
+                                auto buffer{asio::buffer(&size, 4)};
+                                asio::read(socket_, buffer, asio::transfer_exactly(4), error_code);
+                                if (error_code) { break; }
+                        }
 
-                        std::string input(size, '\0');
-                        auto input_buffer{asio::buffer(&input[0], size)};
-                        asio::read(socket_, input_buffer, asio::transfer_exactly(size), error_code);
-                        if (error_code) { break; }
+                        std::string data(size, '\0');
+                        {
+                                auto buffer{asio::buffer(&data[0], size)};
+                                asio::read(socket_, buffer, asio::transfer_exactly(size), error_code);
+                                if (error_code) { break; }
+                        }
 
                         rslp::Command command;
-                        command.ParseFromString(input);
+                        command.ParseFromString(data);
 
                         {
                                 std::string str{command.DebugString()};
@@ -208,51 +209,88 @@ private:
 };
 
 
-static void install_signal_handler()
-{
-        std::thread{[&]() {
-                ::sigset_t sigset;
-                sigemptyset(&sigset);
-                sigaddset(&sigset, SIGTERM);
-                sigaddset(&sigset, SIGINT);
-                sigprocmask(SIG_BLOCK, &sigset, nullptr);
+class Proxy {
+public:
+        Proxy(const Options& options) :
+                options_{options}, logger_{spdlog::stdout_color_mt(LOGGER_NAME)}
+        { }
 
-                int sig;
-                sigwait(&sigset, &sig);
+        [[noreturn]]
+        void run()
+        {
+                setup_logger();
+                read_config_file();
 
-                clean_up();
-                std::exit(0);
-        }}.detach();
-}
+                if (options_.daemonize) {
+                        logger_->info("Daemonizing server, logfile: {}", options_.log_path);
+                        daemonize_process();
+                        // The parent process has exited already.
 
+                        // Drop the console logger and create a rotating file logger.
+                        spdlog::drop(LOGGER_NAME);
+                        logger_ = spdlog::rotating_logger_mt(LOGGER_NAME, options_.log_path,
+                                                            1048576 * 10, 10);
+                        setup_logger();
+                }
 
-[[noreturn]]
-static void listen_for_connections(const Options& options)
-{
-        asio::io_service io_service;
-
-        asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v4(), options.port};
-        asio::ip::tcp::acceptor acceptor{io_service, endpoint};
-
-        spdlog::get(LOGGER_NAME)->info("Started listening on 0.0.0.0:{}", options.port);
-
-        for (;;) {
-                auto server{std::make_shared<ProtobufRedisAdapter>(options.remote_host, io_service)};
-                acceptor.accept(server->socket());
-
-                std::thread{&ProtobufRedisAdapter::start, server}.detach();
+                listen_for_connections();
         }
-}
 
+private:
+        [[noreturn]]
+        void listen_for_connections()
+        {
+                asio::io_context io_context;
+                asio::ip::tcp::acceptor acceptor{io_context};
 
-static void setup_logger(std::shared_ptr<spdlog::logger> logger, const Options& options)
-{
-        logger->flush_on(spdlog::level::warn);
+                try {
+                        acceptor = {io_context, {asio::ip::tcp::v4(), options_.port}};
+                } catch (const asio::system_error& ex) {
+                        logger_->error("Could not listen on 0.0.0.0:{}, exiting! ({})",
+                                        options_.port, ex.what());
+                        std::exit(3);
+                }
 
-        if (options.verbose) {
-                logger->set_level(spdlog::level::debug);
+                logger_->info("Started listening on 0.0.0.0:{}", options_.port);
+
+                for (;;) {
+                        auto server{std::make_shared<ProtobufRedisAdapter>(options_.remote_host, io_context)};
+                        acceptor.accept(server->socket());
+
+                        std::thread{&ProtobufRedisAdapter::start, server}.detach();
+                }
         }
-}
+
+        void read_config_file()
+        {
+                if (!options_.config_path.length()) {
+                        return;
+                }
+
+                std::ifstream file{options_.config_path};
+
+                if (!file) {
+                        logger_->warn("Configuration file not found! Using compiled-in defaults ..");
+                } else {
+                        file >> config_;
+                        file.close();
+                }
+        }
+
+        void setup_logger()
+        {
+                logger_->flush_on(spdlog::level::info);
+
+                if (options_.verbose) {
+                        logger_->set_level(spdlog::level::debug);
+                }
+        }
+
+
+        const Options& options_;
+        std::shared_ptr<spdlog::logger> logger_;
+        json config_;
+};
 
 
 int main(int argc, char* argv[])
@@ -260,23 +298,7 @@ int main(int argc, char* argv[])
         GOOGLE_PROTOBUF_VERIFY_VERSION;
 
         auto options{parse_commandline(argc, argv)};
-        auto logger{spdlog::stdout_color_mt(LOGGER_NAME)};
-        setup_logger(logger, options);
-
-        json config{read_config_file(options.config_path)};
-
-        if (options.daemonize) {
-                logger->info("Daemonizing server, logfile: {}", options.log_path);
-                daemonize_process();
-                // The parent process has exited already.
-
-                // Drop the console logger and create a rotating file logger.
-                spdlog::drop(LOGGER_NAME);
-                logger = spdlog::rotating_logger_mt(LOGGER_NAME, options.log_path,
-                                                    1048576 * 10, 10);
-                setup_logger(logger, options);
-        }
 
         install_signal_handler();
-        listen_for_connections(options);
+        Proxy{options}.run();
 }
