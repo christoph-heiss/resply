@@ -102,7 +102,7 @@ public:
                 asio::error_code error_code;
 
                 asio::ip::tcp::resolver resolver{io_context_};
-                auto results = resolver.resolve(host_, port_, error_code);
+                auto results{resolver.resolve(host_, port_, error_code)};
                 check_asio_error(error_code);
 
                 asio::connect(socket_, results, error_code);
@@ -149,6 +149,9 @@ public:
 
                         if (channel_callbacks_.count(channel)) {
                                 channel_callbacks_[channel](channel, message);
+                        } else {
+                                std::cout << "Message on channel '" << channel
+                                          << "': " << message << std::endl;
                         }
                 }
         }
