@@ -77,17 +77,14 @@ int main(int argc, char* argv[])
                 if (!line.length()) {
                         continue;
                 }
-                std::stringstream linestream{line};
 
+                std::stringstream linestream{line};
                 std::vector<std::string> command;
                 while (linestream >> line) {
                         command.push_back(line);
                 }
 
-                std::stringstream stream;
-                stream << client.command(command);
-
-                std::cout << stream.str() << std::endl;
+                std::cout << client.command(command) << std::endl;
 
                 if (strcmp_icase(command.front(), "subscribe") || strcmp_icase(command.front(), "psubscribe")) {
                         client.listen_for_messages();

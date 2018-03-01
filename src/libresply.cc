@@ -68,13 +68,13 @@ std::ostream& operator<<(std::ostream& ostream, const Result& result)
                 for (size_t i{}; i < result.array.size(); i++) {
                         ostream << i+1 << ") " << result.array[i];
 
-                        if (i != result.array.size()-1) {
+                        if (i < result.array.size()-1) {
                                 ostream << '\n';
                         }
                 }
 
                 break;
-        };
+        }
 
         return ostream;
 }
