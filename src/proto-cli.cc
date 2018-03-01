@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
         }
 
         rslp::Command command;
-        command.set_type(rslp::Command::STRING);
+        command.set_type(rslp::Command::String);
 
         auto* data{command.add_data()};
         data->set_str("ping");

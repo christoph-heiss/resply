@@ -13,10 +13,11 @@ package rslp;
 
 message Command {
         enum Type {
-                STRING = 0;
-                ERROR = 1;
-                INTEGER = 2;
-                ARRAY = 3;
+                Nil = 0;
+                String = 1;
+                Error = 2;
+                Integer = 3;
+                Array = 4;
         }
 
         message Data {
