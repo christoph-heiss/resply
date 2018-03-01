@@ -285,6 +285,7 @@ private:
                 logger_->flush_on(spdlog::level::info);
 
                 if (options_.verbose) {
+                        logger_->info("Setting logging level to verbose.");
                         logger_->set_level(spdlog::level::debug);
                 }
         }
