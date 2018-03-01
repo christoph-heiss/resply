@@ -69,6 +69,41 @@ static bool connect_to_server(const Options& options, asio::ip::tcp::socket& soc
 }
 
 
+static std::string receive_data(asio::ip::tcp::socket& socket)
+{
+        asio::error_code error_code;
+
+        size_t size;
+        {
+                auto buffer{asio::buffer(&size, 4)};
+                asio::read(socket, buffer, asio::transfer_exactly(4), error_code);
+                if (error_code) { return {}; }
+
+                size = ntohl(size);
+        }
+
+        std::string data(size, '\0');
+        {
+                auto buffer{asio::buffer(&data[0], size)};
+                asio::read(socket, buffer, asio::transfer_exactly(size), error_code);
+                if (error_code) { return {}; }
+        }
+
+        return data;
+}
+
+
+static void send_data(asio::ip::tcp::socket& socket, rslp::Command& command)
+{
+        std::string output;
+        command.SerializeToString(&output);
+
+        uint32_t size{htonl(static_cast<uint32_t>(output.size()))};
+        asio::write(socket, asio::buffer(&size, 4));
+        asio::write(socket, asio::buffer(output.data(), output.size()));
+}
+
+
 int main(int argc, char* argv[])
 {
         GOOGLE_PROTOBUF_VERIFY_VERSION;
@@ -81,17 +116,21 @@ int main(int argc, char* argv[])
         }
 
         rslp::Command command;
-        command.set_type(rslp::Command::String);
+        command.set_type(rslp::Command::Array);
 
         auto* data{command.add_data()};
-        data->set_str("ping");
+        data->set_str("mget");
 
-        std::string output;
-        command.SerializeToString(&output);
+        data = command.add_data();
+        data->set_str("a");
 
-        uint32_t size{htonl(static_cast<uint32_t>(output.size()))};
-        asio::write(socket, asio::buffer(&size, 4));
-        asio::write(socket, asio::buffer(output.data(), output.size()));
+        data = command.add_data();
+        data->set_str("b");
+
+        send_data(socket, command);
+        command.ParseFromString(receive_data(socket));
+
+        std::cout << command.DebugString() << std::endl;
 
         google::protobuf::ShutdownProtobufLibrary();
         return 0;
