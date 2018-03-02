@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
+#include <ostream>
 #include <arpa/inet.h>
 
 #include "asio.hpp"
@@ -47,61 +49,136 @@ static Options parse_commandline(int argc, char** argv)
 }
 
 
-static bool connect_to_server(const Options& options, asio::ip::tcp::socket& socket)
+
+std::ostream& operator<<(std::ostream& ostream, const rslp::Command& command)
 {
-        asio::io_context io_context;
-        asio::error_code error_code;
-        asio::ip::tcp::resolver resolver{io_context};
+        switch (command.type()) {
+                case rslp::Command::Nil:
+                        ostream << "(nil)";
+                        break;
 
-        auto results = resolver.resolve(options.host, options.port, error_code);
-        if (error_code) {
-                std::cerr << "Error while connecting: " << error_code.message() << std::endl;
-                return false;
+                case rslp::Command::Error:
+                        ostream << "(error) ";
+                        [[fallthrough]];
+
+                case rslp::Command::String:
+                        ostream << '"' << command.data(0).str() << '"';
+                        break;
+
+                case rslp::Command::Integer:
+                        ostream << command.data(0).int_();
+                        break;
+
+                case rslp::Command::Array: {
+                        auto data{command.data()};
+                        for (int i{}; i < command.data_size(); i++) {
+                                ostream << i+1 << ") " << command.data(i).subdata();
+
+                                if (i < command.data_size()-1) {
+                                        ostream << '\n';
+                                }
+                        }
+
+                        break;
+                }
+
+                default: /* To silence to compiler */
+                        break;
         }
 
-        asio::connect(socket, results, error_code);
-        if (error_code) {
-                std::cerr << "Error while connecting: " << error_code.message() << std::endl;
-                return false;
-        }
-
-        return true;
+        return ostream;
 }
 
 
-static std::string receive_data(asio::ip::tcp::socket& socket)
-{
-        asio::error_code error_code;
+class ProtobufResplyClient {
+public:
+        ProtobufResplyClient(const std::string& host, const std::string& port) :
+                host_{host}, port_{port}, socket_{io_context_}
+        { }
 
-        size_t size;
+        bool connect()
         {
-                auto buffer{asio::buffer(&size, 4)};
-                asio::read(socket, buffer, asio::transfer_exactly(4), error_code);
-                if (error_code) { return {}; }
+                asio::error_code error_code;
+                asio::ip::tcp::resolver resolver{io_context_};
 
-                size = ntohl(size);
+                auto results = resolver.resolve(host_, port_, error_code);
+                if (error_code) {
+                        std::cerr << "Error while connecting: " << error_code.message() << std::endl;
+                        return false;
+                }
+
+                asio::connect(socket_, results, error_code);
+                if (error_code) {
+                        std::cerr << "Error while connecting: " << error_code.message() << std::endl;
+                        return false;
+                }
+
+                return true;
         }
 
-        std::string data(size, '\0');
+        void close()
         {
-                auto buffer{asio::buffer(&data[0], size)};
-                asio::read(socket, buffer, asio::transfer_exactly(size), error_code);
-                if (error_code) { return {}; }
+                socket_.close();
         }
 
-        return data;
-}
+        rslp::Command send_command(const std::vector<std::string>& arguments)
+        {
+                rslp::Command command;
+                command.set_type(rslp::Command::Array);
 
+                for (const std::string& arg: arguments) {
+                        auto* data{command.add_data()};
+                        data->set_str(arg);
+                }
 
-static void send_data(asio::ip::tcp::socket& socket, rslp::Command& command)
-{
-        std::string output;
-        command.SerializeToString(&output);
+                send_data(command);
 
-        uint32_t size{htonl(static_cast<uint32_t>(output.size()))};
-        asio::write(socket, asio::buffer(&size, 4));
-        asio::write(socket, asio::buffer(output.data(), output.size()));
-}
+                command.ParseFromString(receive_data());
+                return command;
+        }
+
+private:
+        std::string receive_data()
+        {
+                asio::error_code error_code;
+
+                size_t size;
+                {
+                        auto buffer{asio::buffer(&size, 4)};
+                        asio::read(socket_, buffer, asio::transfer_exactly(4), error_code);
+                        if (error_code) { return {}; }
+
+                        size = ntohl(size);
+                }
+
+                std::string data(size, '\0');
+                {
+                        auto buffer{asio::buffer(&data[0], size)};
+                        asio::read(socket_, buffer, asio::transfer_exactly(size), error_code);
+                        if (error_code) { return {}; }
+                }
+
+                return data;
+        }
+
+        void send_data(rslp::Command& command)
+        {
+                std::string output;
+                command.SerializeToString(&output);
+
+                uint32_t size{htonl(static_cast<uint32_t>(output.size()))};
+                asio::write(socket_, asio::buffer(&size, 4));
+                asio::write(socket_, asio::buffer(output.data(), output.size()));
+        }
+
+private:
+        const std::string& host_;
+        const std::string& port_;
+
+        asio::io_context io_context_;
+        asio::ip::tcp::socket socket_;
+};
+
 
 
 int main(int argc, char* argv[])
@@ -109,28 +186,33 @@ int main(int argc, char* argv[])
         GOOGLE_PROTOBUF_VERIFY_VERSION;
         auto options{parse_commandline(argc, argv)};
 
-        asio::io_context io_context;
-        asio::ip::tcp::socket socket{io_context};
-        if (!connect_to_server(options, socket)) {
+        ProtobufResplyClient client{options.host, options.port};
+        if (!client.connect()) {
                 return 1;
         }
 
-        rslp::Command command;
-        command.set_type(rslp::Command::Array);
+        while (std::cin) {
+                std::cout << options.host << ':' << options.port << "> ";
 
-        auto* data{command.add_data()};
-        data->set_str("mget");
+                std::string line;
+                std::getline(std::cin, line);
 
-        data = command.add_data();
-        data->set_str("a");
+                if (!line.length()) {
+                        continue;
+                }
+                std::stringstream linestream{line};
 
-        data = command.add_data();
-        data->set_str("b");
+                std::vector<std::string> command;
+                while (linestream >> line) {
+                        command.push_back(line);
+                }
 
-        send_data(socket, command);
-        command.ParseFromString(receive_data(socket));
+                std::cout << client.send_command(command) << std::endl;
 
-        std::cout << command.DebugString() << std::endl;
+        }
+
+        client.close();
+        std::cout << std::endl;
 
         google::protobuf::ShutdownProtobufLibrary();
         return 0;
