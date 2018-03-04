@@ -51,16 +51,6 @@ static Options parse_commandline(int argc, char** argv)
 }
 
 
-/* case-sensitive string comparison */
-static bool strcmp_icase(std::string str1, std::string str2)
-{
-        std::transform(str1.begin(), str1.end(), str1.begin(), ::tolower);
-        std::transform(str2.begin(), str2.end(), str2.begin(), ::tolower);
-
-        return str1 == str2;
-}
-
-
 int main(int argc, char* argv[])
 {
         auto options{parse_commandline(argc, argv)};
@@ -84,9 +74,12 @@ int main(int argc, char* argv[])
                         command.push_back(line);
                 }
 
-                std::cout << client.command(command) << std::endl;
+                resply::Result result{client.command(command)};
+                std::cout << result << std::endl;
 
-                if (strcmp_icase(command.front(), "subscribe") || strcmp_icase(command.front(), "psubscribe")) {
+                if (result.type == resply::Result::Type::Array && result.array.size() > 0 &&
+                    result.array[0].type == resply::Result::Type::String &&
+                    (result.array[0].string == "subscribe" || result.array[0].string == "psubscribe")) {
                         client.listen_for_messages();
                 }
         }
