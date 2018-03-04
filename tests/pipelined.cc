@@ -21,8 +21,8 @@ int main()
                 .command("incr", "a")
                 .send();
 
-        return !(result.size() == 3 &&
-               result[0].integer == 1 &&
-               result[1].integer == 2 &&
-               result[2].integer == 3);
+        return result.size() == 3 &&
+               result[0].type == resply::Result::Type::Integer && result[0].integer == 1 &&
+               result[1].type == resply::Result::Type::Integer && result[1].integer == 2 &&
+               result[2].type == resply::Result::Type::Integer && result[2].integer == 3;
 }

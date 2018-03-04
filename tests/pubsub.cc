@@ -33,5 +33,6 @@ int main()
         client2.command("publish", "a", "pubsub-test");
 
         auto message{result.get_future().get()};
-        return message.first == "a" && message.second == "pubusb-test";
+
+        return message.first == "a" && message.second == "pubsub-test";
 }

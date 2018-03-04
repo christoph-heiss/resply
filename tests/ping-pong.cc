@@ -16,5 +16,5 @@ int main()
 
         auto result{client.command("ping")};
 
-        return !(result.type == resply::Result::Type::String && result.string == "PONG");
+        return result.type == resply::Result::Type::String && result.string == "PONG";
 }
