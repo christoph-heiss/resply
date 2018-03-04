@@ -139,7 +139,7 @@ public:
                 return receive_responses(commands.size());
         }
 
-        void listen_for_messages()
+        void listen_for_messages(ChannelCallback other)
         {
                 for (;;) {
                         Result result{receive_response()};
@@ -149,7 +149,11 @@ public:
                                 std::string& channel = result.array[1].string;
                                 std::string& message = result.array[2].string;
 
-                                channel_callbacks_[channel](channel, message);
+                                if (channel_callbacks_.count(channel)) {
+                                        channel_callbacks_[channel](channel, message);
+                                } else {
+                                        other(channel, message);
+                                }
                         }
                 }
         }
@@ -272,9 +276,9 @@ Result Client::finish_command(const std::string& command)
         return command.empty() ? Result{} : impl_->send(command);
 }
 
-void Client::listen_for_messages()
+void Client::listen_for_messages(ChannelCallback other)
 {
-        impl_->listen_for_messages();
+        impl_->listen_for_messages(other);
 }
 
 std::vector<Result> Client::Pipeline::send()

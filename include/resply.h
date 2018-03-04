@@ -272,11 +272,19 @@ namespace resply {
                 Client& psubscribe(const std::string& pattern, ChannelCallback callback);
 
                 /*! \brief Puts the client into subscribed mode.
+                 *  \param other Message callback for channels subscribed to using #command.
                  *
                  *  This method will not return until the client has been unsubscribed
                  *  from all channels.
                  */
-                void listen_for_messages();
+                void listen_for_messages(ChannelCallback other);
+
+                /*! \brief Puts the client into subscribed mode.
+                 *
+                 *  Convience method which just ignores auxiliary messages.
+                 */
+                void listen_for_messages() { listen_for_messages([](auto, auto) {}); }
+
 
         private:
                 /*! \brief Sends the command to the server.
