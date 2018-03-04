@@ -288,7 +288,10 @@ std::vector<Result> Client::Pipeline::send()
 
 Client::Pipeline& Client::Pipeline::finish_command(const std::string& command)
 {
-        if (!command.empty()) {
+        std::string lower;
+        std::transform(command.begin(), command.end(), lower.begin(), ::tolower);
+
+        if (!command.empty() && lower.find("subscribe") == std::string::npos) {
                 commands_.emplace_back(command + "\r\n");
         }
 

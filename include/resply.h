@@ -163,7 +163,10 @@ namespace resply {
          */
         class Client : public RespCommandSerializer<Result> {
         public:
-                /*! \brief A pipelined redis client. */
+                /*! \brief A pipelined redis client.
+                 *
+                 *  This type of client will reject any {P}{UN}SUBSCIBRE commands.
+                 */
                 class Pipeline : public RespCommandSerializer<Pipeline&> {
                 public:
                         /*! \brief Constructs a new pipelined client.
