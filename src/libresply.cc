@@ -123,7 +123,7 @@ public:
                 asio::write(socket_, asio::buffer(command), error_code);
                 check_asio_error(error_code);
 
-                return receive_response();
+                return in_subscribed_mode() ? Result{} : receive_response();
         }
 
         std::vector<Result> send_batch(const std::vector<std::string>& commands)
@@ -144,14 +144,17 @@ public:
                 for (;;) {
                         Result result{receive_response()};
 
-                        std::string& channel = result.array[1].string;
-                        std::string& message = result.array[2].string;
+                        if (result.type == Result::Type::Array && result.array.size() == 3 &&
+                            result.array.front().type == Result::Type::String && result.array.front().string == "message") {
+                                std::string& channel = result.array[1].string;
+                                std::string& message = result.array[2].string;
 
-                        if (channel_callbacks_.count(channel)) {
-                                channel_callbacks_[channel](channel, message);
-                        } else {
-                                std::cout << "Message on channel '" << channel
-                                          << "': " << message << std::endl;
+                                if (channel_callbacks_.count(channel)) {
+                                        channel_callbacks_[channel](channel, message);
+                                } else {
+                                        std::cout << "Message on channel '" << channel
+                                                  << "': " << message << std::endl;
+                                }
                         }
                 }
         }
@@ -169,6 +172,11 @@ public:
         const std::string& port() const
         {
                 return port_;
+        }
+
+        bool in_subscribed_mode() const
+        {
+                return channel_callbacks_.size();
         }
 
 private:
@@ -245,7 +253,7 @@ const std::string& Client::port() const { return impl_->port(); }
 
 bool Client::in_subscribed_mode() const
 {
-        return impl_->channel_callbacks().size();
+        return impl_->in_subscribed_mode();
 }
 
 Client& Client::subscribe(const std::string& channel, ChannelCallback callback)
