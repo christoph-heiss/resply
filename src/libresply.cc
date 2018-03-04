@@ -149,12 +149,7 @@ public:
                                 std::string& channel = result.array[1].string;
                                 std::string& message = result.array[2].string;
 
-                                if (channel_callbacks_.count(channel)) {
-                                        channel_callbacks_[channel](channel, message);
-                                } else {
-                                        std::cout << "Message on channel '" << channel
-                                                  << "': " << message << std::endl;
-                                }
+                                channel_callbacks_[channel](channel, message);
                         }
                 }
         }
