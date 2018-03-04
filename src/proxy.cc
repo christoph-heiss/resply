@@ -197,10 +197,28 @@ public:
                         resply_result_to_rslp(response, result);
 
                         send_data(response);
+
+                        if (result.type == resply::Result::Type::Array &&
+                            result.array[0].type == resply::Result::Type::String &&
+                            (result.array[0].string == "subscribe" || result.array[0].string == "psubscribe")) {
+                                listen_for_messages();
+                        }
                 }
         }
 
 private:
+        void listen_for_messages()
+        {
+                client_.listen_for_messages([this](const auto& channel, const auto& message) {
+                        rslp::Command response;
+                        response.add_data()->set_str("message");
+                        response.add_data()->set_str(channel);
+                        response.add_data()->set_str(message);
+
+                        send_data(response);
+                });
+        }
+
         std::string receive_data()
         {
                 asio::error_code error_code;

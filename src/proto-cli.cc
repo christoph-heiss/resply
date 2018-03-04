@@ -11,6 +11,7 @@
 #include <vector>
 #include <ostream>
 #include <arpa/inet.h>
+#include <functional>
 
 #include "asio.hpp"
 #include "clipp.h"
@@ -136,6 +137,16 @@ public:
                 return command;
         }
 
+        void listen_for_messages(std::function<void(const std::string&, const std::string&)> callback)
+        {
+                for (;;) {
+                        rslp::Command command;
+                        command.ParseFromString(receive_data());
+
+                        callback(command.data(1).str(), command.data(2).str());
+                }
+        }
+
 private:
         std::string receive_data()
         {
@@ -209,6 +220,15 @@ int main(int argc, char* argv[])
                 rslp::Command result{client.send_command(command)};
                 std::cout << result << std::endl;
 
+                if (result.data_size() > 0) {
+                        auto data{result.data(0)};
+                        if (data.data_case() == rslp::Command_Data::DataCase::kStr &&
+                            (data.str() == "subscribe" || data.str() == "psubscribe")) {
+                                client.listen_for_messages([](const auto& channel, const auto& message) {
+                                        std::cout << channel << ": " << message << std::endl;
+                                });
+                        }
+                }
         }
 
         client.close();
