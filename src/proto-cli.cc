@@ -49,41 +49,42 @@ static Options parse_commandline(int argc, char** argv)
 }
 
 
-
 std::ostream& operator<<(std::ostream& ostream, const rslp::Command& command)
 {
-        switch (command.type()) {
-                case rslp::Command::Nil:
+        using Type = rslp::Command_Data::DataCase;
+
+        for (int i{}; i < command.data_size(); i++) {
+                auto data{command.data(i)};
+
+                if (command.data_size() > 1) {
+                        ostream << i+1 << ") ";
+                }
+
+                switch (data.data_case()) {
+                case Type::kErr:
+                        ostream << "(error) \"" << data.err() << '"';
+                        break;
+
+                case Type::kStr:
+                        ostream << '"' << data.str() << '"';
+                        break;
+
+                case Type::kInt:
+                        ostream << data.int_();
+                        break;
+
+                case Type::kArray:
+                        ostream << data.array();
+                        break;
+
+                default:
                         ostream << "(nil)";
-                        break;
-
-                case rslp::Command::Error:
-                        ostream << "(error) ";
-                        [[fallthrough]];
-
-                case rslp::Command::String:
-                        ostream << '"' << command.data(0).str() << '"';
-                        break;
-
-                case rslp::Command::Integer:
-                        ostream << command.data(0).int_();
-                        break;
-
-                case rslp::Command::Array: {
-                        auto data{command.data()};
-                        for (int i{}; i < command.data_size(); i++) {
-                                ostream << i+1 << ") " << command.data(i).subdata();
-
-                                if (i < command.data_size()-1) {
-                                        ostream << '\n';
-                                }
-                        }
-
                         break;
                 }
 
-                default: /* To silence to compiler */
-                        break;
+                if (command.data_size() > 1 && i < command.data_size()-1) {
+                        ostream << '\n';
+                }
         }
 
         return ostream;
@@ -124,11 +125,9 @@ public:
         rslp::Command send_command(const std::vector<std::string>& arguments)
         {
                 rslp::Command command;
-                command.set_type(rslp::Command::Array);
 
                 for (const std::string& arg: arguments) {
-                        auto* data{command.add_data()};
-                        data->set_str(arg);
+                        command.add_data()->set_str(arg);
                 }
 
                 send_data(command);
@@ -207,7 +206,8 @@ int main(int argc, char* argv[])
                         command.push_back(line);
                 }
 
-                std::cout << client.send_command(command) << std::endl;
+                rslp::Command result{client.send_command(command)};
+                std::cout << result << std::endl;
 
         }
 

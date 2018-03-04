@@ -12,24 +12,16 @@ package rslp;
 
 
 message Command {
-        enum Type {
-                Nil = 0;
-                String = 1;
-                Error = 2;
-                Integer = 3;
-                Array = 4;
-        }
-
         message Data {
                 oneof data {
                         string str = 1;
-                        sint64 int = 2;
-                        Command subdata = 3;
+                        string err = 2;
+                        sint64 int = 3;
+                        Command array = 4;
                 }
         }
 
-        Type type = 1;
-        repeated Data data = 2;
+        repeated Data data = 1;
 }
 
 

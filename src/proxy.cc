@@ -187,10 +187,8 @@ public:
                         logger_->debug("Received '{}' on {}", debug_string, remote_address_);
 
                         std::vector<std::string> resply_command;
-                        const auto arguments{command.mutable_data()};
-
-                        for (int i{}; i < arguments->size(); i++) {
-                                resply_command.push_back(arguments->Get(i).str());
+                        for (const auto& arg: command.data()) {
+                                resply_command.push_back(arg.str());
                         }
 
                         resply::Result result{client_.command(resply_command)};
@@ -236,46 +234,58 @@ private:
                 asio::write(socket_, asio::buffer(output.data(), output.size()));
         }
 
-        static void resply_result_to_rslp(rslp::Command& command, const resply::Result& result) {
+        static void resply_result_to_rslp(rslp::Command& command, const resply::Result& result)
+        {
                 using Type = resply::Result::Type;
 
                 switch (result.type) {
-                        case Type::String: {
-                                command.set_type(rslp::Command::String);
-                                auto data{command.add_data()};
-                                data->set_str(result.string);
+                        case Type::ProtocolError:
+                        case Type::IOError:
+                                command.add_data()->set_err(result.string);
                                 break;
-                        }
 
-                        case Type::Integer: {
-                                command.set_type(rslp::Command::Integer);
-                                auto data{command.add_data()};
-                                data->set_int_(result.integer);
+                        case Type::String:
+                                command.add_data()->set_str(result.string);
                                 break;
-                        }
 
-                        case Type::Array: {
-                                command.set_type(rslp::Command::Array);
+                        case Type::Integer:
+                                command.add_data()->set_int_(result.integer);
+                                break;
 
+                        case Type::Array:
                                 for (const auto& element: result.array) {
-                                        auto data{command.add_data()};
-                                        resply_result_to_rslp(*data->mutable_subdata(), element);
+                                        resply_result_to_rslp_data(command.add_data(), element);
                                 }
 
                                 break;
-                        }
-
-                        case Type::ProtocolError:
-                        case Type::IOError: {
-                                command.set_type(rslp::Command::Error);
-                                auto data{command.add_data()};
-                                data->set_str(result.string);
-                                break;
-                        }
 
                         case Type::Nil:
-                                command.set_type(rslp::Command::Nil);
                                 break;
+                }
+        }
+
+        static void resply_result_to_rslp_data(rslp::Command_Data* data, const resply::Result& result)
+        {
+                using Type = resply::Result::Type;
+
+                switch (result.type) {
+                case Type::String:
+                        data->set_str(result.string);
+                        break;
+
+                case Type::Integer:
+                        data->set_int_(result.integer);
+                        break;
+
+                case Type::Array:
+                        for (const auto& element: result.array) {
+                                resply_result_to_rslp(*data->mutable_array(), element);
+                        }
+                        break;
+
+                default:
+                        /* Cannot happen */
+                        break;
                 }
         }
 
