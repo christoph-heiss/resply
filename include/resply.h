@@ -14,8 +14,9 @@
 #include <cstddef>
 #include <sstream>
 #include <type_traits>
-#include <iostream>
 #include <functional>
+#include <initializer_list>
+#include <random>
 
 
 namespace resply {
@@ -235,6 +236,11 @@ namespace resply {
                  */
                 const std::string& port() const;
 
+                /*! \brief Checks if the client is connected to a redis server.
+                 *  \return If the client is connected.
+                 */
+                bool is_connected() const;
+
                 /*! \brief Creates a new pipelined client using this client.
                  *  \return A pipelined client.
                  */
@@ -295,5 +301,133 @@ namespace resply {
 
                 /*! \brief Internal client implementation. */
                 std::unique_ptr<ClientImpl> impl_;
+        };
+
+        /*! \brief Implementation for a distributed lock based on the Redlock algorithm.
+         *
+         *  \see https://redis.io/topics/distlock
+         */
+        class Redlock {
+        public:
+                /*! \brief Constructs a new distributed lock.
+                 *  \param resource_name Name of the lock.
+                 *  \param hosts List of redis servers to lock.
+                 */
+                Redlock(std::string resource_name, const std::vector<std::string>& hosts);
+
+                /*! \brief Constructs a new distributed lock.
+                 *  \param resource_name Name of the lock.
+                 *  \param clients List of redis clients to use.
+                 */
+                Redlock(std::string resource_name, std::vector<std::shared_ptr<Client>> clients);
+
+                /*! \brief Constructs a new distributed lock.
+                 *  \param resource_name Name of the lock.
+                 *  \param hosts List of redis servers to lock.
+                 */
+                Redlock(std::string resource_name, const std::initializer_list<std::string> hosts);
+
+                /*! \brief Constructs a new distributed lock.
+                 *  \param resource_name Name of the lock.
+                 *  \param clients List of redis clients to use.
+                 */
+                Redlock(std::string resource_name, std::initializer_list<std::shared_ptr<Client>> clients);
+
+                /*! \brief Unlocks the distributed lock if needed. */
+                ~Redlock();
+
+                /*! \brief Connects all clients to the server.
+                 *
+                 *  This is only needed if the Redlock is constructed using hostnames
+                 *  or the clients passed into are not connected yet.
+                 */
+                void initialize();
+
+                /*! \brief Locks the distributed lock.
+                 *  \param ttl Lifetime of the lock.
+                 *  \return The validity time of the lock.
+                 */
+                size_t lock(size_t ttl);
+
+                /*! \brief Unlocks the distributed lock. */
+                void unlock();
+
+                /*! \brief Gets the number of retries to acquire the lock.
+                 *  \return The number of retries to the acquire the lock.
+                 */
+                size_t retry_count() const { return retry_count_; }
+
+                /*! \brief Sets the number of retries to acquire the lock.
+                 *  \param count The new number of retries to acquire the lock.
+                 */
+                void retry_count(size_t count) { retry_count_ = count; }
+
+                /*! \brief Gets the maximum retry delay in milliseconds.
+                 *  \return The maximum retry delay in milliseconds.
+                 *
+                 *  The actual retry delay is random, this is the upper limit for delay.
+                 */
+                size_t retry_delay_max() const { return retry_delay_max_; }
+
+                /*! \brief Sets the maximum retry delay in milliseconds.
+                 *  \param delay The maximum retry delay in milliseconds.
+                 *
+                 *  \see retry_delay_max()
+                 */
+                void retry_delay_max(size_t delay) { retry_delay_max_ = delay; }
+
+        private:
+                /*! \brief Acquires the lock on a single instance.
+                 *  \param client The instance to acquire the lock on.
+                 *  \param ttl The intended lifetime of the lock.
+                 *  \return True if the lock was successfully acquired, otherwise false.
+                 */
+                bool lock_instance(std::shared_ptr<Client> client, size_t ttl);
+
+                /*! \brief Releases the lock on a single instance.
+                 *
+                 *  It just tries to unlock and will not care wethever it was successful
+                 *  or not.
+                 */
+                void unlock_instance(std::shared_ptr<Client> client);
+
+                /*! \brief Generates a random delay value based on #retry_delay_max_
+                 *  \return The generated random delay.
+                 */
+                std::chrono::milliseconds get_random_delay();
+
+                /*! \brief The clients this distributed lock will try the lock on. */
+                std::vector<std::shared_ptr<Client>> clients_;
+
+                /*! \brief Name of the lock. */
+                const std::string resource_name_;
+
+                /*! \brief Unique randomly-generated lock value. */
+                const std::string lock_value_;
+
+                /*! \brief Amount of times #lock will try to acquire the lock. */
+                size_t retry_count_;
+
+                /*! \brief Maximum retry delay in milliseconds. */
+                size_t retry_delay_max_;
+
+                /*! \brief Random number generator for #get_random_delay(). */
+                std::mt19937 random_number_gen_;
+
+                /*! \brief Generates a random, unique lock value. */
+                static std::string generate_lock_value();
+
+                /*! \brief Lua script for unlocking the lock. */
+                static std::string UNLOCK_SCRIPT_;
+
+                /*! \brief Clock drift divisor.
+                 *
+                 *  This is used to calculate the clock drift to account for based
+                 *  on the targeted lifetime of the lock.
+                 *
+                 *  The clock drift is caluclated as following:
+                 *      Lifetime of the lock / clock drift divisor
+                 */
+                static constexpr size_t CLOCK_DRIFT_DIV = 100;
         };
 }

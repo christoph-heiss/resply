@@ -13,6 +13,10 @@
 #include <numeric>
 #include <unordered_map>
 #include <cctype>
+#include <fstream>
+#include <array>
+#include <chrono>
+#include <thread>
 
 #include <asio.hpp>
 
@@ -29,6 +33,16 @@ bool check_asio_error(asio::error_code& error_code)
         }
 
         return !!error_code;
+}
+
+long get_system_clock_ms()
+{
+        namespace chrono = std::chrono;
+
+        auto now{chrono::system_clock::now()};
+        auto millisec{chrono::time_point_cast<chrono::milliseconds>(now)};
+
+        return millisec.time_since_epoch().count();
 }
 
 }
@@ -173,6 +187,11 @@ public:
                 return port_;
         }
 
+        bool is_connected() const
+        {
+                return socket_.is_open();
+        }
+
         bool in_subscribed_mode() const
         {
                 return channel_callbacks_.size();
@@ -249,6 +268,7 @@ void Client::connect() { impl_->connect(); }
 void Client::close() { impl_->close(); }
 const std::string& Client::host() const { return impl_->host(); }
 const std::string& Client::port() const { return impl_->port(); }
+bool Client::is_connected() const { return impl_->is_connected(); }
 
 bool Client::in_subscribed_mode() const
 {
@@ -304,6 +324,133 @@ Client::Pipeline& Client::Pipeline::finish_command(const std::string& command)
 
         return *this;
 }
+
+
+Redlock::Redlock(std::string resource_name, const std::vector<std::string>& hosts) :
+        resource_name_{resource_name}, lock_value_{generate_lock_value()},
+        retry_count_{3}, retry_delay_max_{250}, random_number_gen_{std::random_device()()}
+{
+        for (const std::string& host: hosts) {
+                clients_.push_back(std::make_shared<Client>(host));
+        }
+}
+
+Redlock::Redlock(std::string resource_name, std::vector<std::shared_ptr<Client>> clients) :
+        clients_{std::move(clients)}, resource_name_{resource_name}, lock_value_{generate_lock_value()},
+        retry_count_{3}, retry_delay_max_{250}, random_number_gen_{std::random_device()()}
+{
+
+}
+
+Redlock::Redlock(std::string resource_name, const std::initializer_list<std::string> hosts) :
+        resource_name_{resource_name}, lock_value_{generate_lock_value()},
+        retry_count_{3}, retry_delay_max_{250}, random_number_gen_{std::random_device()()}
+{
+        for (const std::string& host: hosts) {
+                clients_.push_back(std::make_shared<Client>(host));
+        }
+}
+
+Redlock::Redlock(std::string resource_name, std::initializer_list<std::shared_ptr<Client>> clients) :
+        clients_{std::move(clients)}, resource_name_{resource_name}, lock_value_{generate_lock_value()},
+        retry_count_{3}, retry_delay_max_{250}, random_number_gen_{std::random_device()()}
+{
+
+}
+
+Redlock::~Redlock()
+{
+        unlock();
+}
+
+void Redlock::initialize()
+{
+        for (auto& client: clients_) {
+                if (!client->is_connected()) {
+                        client->connect();
+                }
+        }
+}
+
+size_t Redlock::lock(size_t ttl)
+{
+        for (size_t retries{}; retries < retry_count_; retries++) {
+                size_t locked{};
+                long start_time{get_system_clock_ms()};
+
+                for (auto& client: clients_) {
+                        locked += lock_instance(client, ttl);
+                }
+
+                size_t drift{ttl / CLOCK_DRIFT_DIV};
+                size_t valid_time{ttl - (get_system_clock_ms() - start_time) - drift};
+
+                // We need to have at least N/2 + 1 instances locked
+                if (locked >= (clients_.size() / 2 + 1) && valid_time > 0) {
+                        return valid_time;
+                } else {
+                        unlock();
+                }
+
+                // Retry after random delay
+                std::this_thread::sleep_for(get_random_delay());
+        }
+
+        return 0;
+}
+
+void Redlock::unlock()
+{
+        for (auto& client: clients_) {
+                unlock_instance(client);
+        }
+}
+
+bool Redlock::lock_instance(std::shared_ptr<Client> client, size_t ttl)
+{
+        auto result{client->command("set", resource_name_, lock_value_, "NX", "PX", ttl)};
+
+        return result.type == Result::Type::String && result.string == "OK";
+}
+
+void Redlock::unlock_instance(std::shared_ptr<Client> client)
+{
+        client->command("eval", UNLOCK_SCRIPT_, 1, resource_name_, lock_value_);
+}
+
+std::chrono::milliseconds Redlock::get_random_delay()
+{
+        std::uniform_int_distribution<> dist(1, retry_delay_max_);
+
+        return std::chrono::milliseconds{dist(random_number_gen_)};
+}
+
+std::string Redlock::generate_lock_value()
+{
+        static const std::string BASE36_LUT{"0123456789abcdefghijklmnopqrstuvwxyz"};
+
+        std::ifstream file{"/dev/urandom", std::ios_base::binary};
+        std::array<char, 20> buffer;
+        file.read(buffer.data(), 20);
+
+        std::string uid;
+        for (unsigned char byte: buffer) {
+                while (byte) {
+                        uid += BASE36_LUT[byte % 36];
+                        byte /= 36;
+                }
+        }
+
+        return uid;
+}
+
+std::string Redlock::UNLOCK_SCRIPT_ = R"(
+if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('del', KEYS[1])
+else
+        return 0
+end
+)";
 
 }
 
