@@ -83,7 +83,14 @@ string(STRIP "${tests}" tests)
 
 add_custom_target(
         tests
-        COMMAND for t in ${tests}\; do printf %s \"$$t: \"\; ./tests/$$t\; [ $$? == 1 ] && echo success || echo failed\; done
+        COMMAND for t in ${tests}\; do printf %s \"$$t: \"\; ./tests/$$t > /dev/null\; [ $$? == 1 ] && echo success || echo failed\; done
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        DEPENDS ${tests}
+        COMMENT "Running tests")
+
+add_custom_target(
+        tests-verbose
+        COMMAND for t in ${tests}\; do echo -- Running $$t ...\; ./tests/$$t\; [ $$? == 1 ] && echo -- Test $$t succeeded || echo Test $$t failed\; done
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         DEPENDS ${tests}
         COMMENT "Running tests")
