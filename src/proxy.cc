@@ -125,6 +125,17 @@ void install_signal_handler()
         }}.detach();
 }
 
+std::shared_ptr<spdlog::logger> create_logger(const std::string& name)
+{
+        auto global_logger{spdlog::get(GLOBAL_LOGGER_NAME)};
+        auto global_sink{global_logger->sinks().front()};
+
+        auto logger{std::make_shared<spdlog::logger>(name, global_sink)};
+        logger->set_level(global_logger->level());
+
+        return logger;
+}
+
 void daemonize_process()
 {
         auto logger{spdlog::get(GLOBAL_LOGGER_NAME)};
@@ -220,10 +231,8 @@ void resply_result_to_rslp_data(rslp::Command_Data* data, const resply::Result& 
 
 class ProtobufAdapter {
 public:
-        ProtobufAdapter(const std::string& redis_host, asio::io_context& io_context,
-                        std::shared_ptr<spdlog::sinks::sink> logsink) :
-                client_{redis_host}, socket_{io_context},
-                logger_{std::make_shared<spdlog::logger>(LOGGER_NAME, logsink)}
+        ProtobufAdapter(const std::string& redis_host, asio::io_context& io_context) :
+                client_{redis_host}, socket_{io_context}, logger_{create_logger(LOGGER_NAME)}
         { }
 
         ~ProtobufAdapter()
@@ -335,9 +344,9 @@ private:
 
 class ProtobufServer {
 public:
-        void start(const Options& options, std::shared_ptr<spdlog::sinks::sink> logsink)
+        void start(const Options& options)
         {
-                auto logger{std::make_shared<spdlog::logger>(LOGGER_NAME, logsink)};
+                auto logger{create_logger(LOGGER_NAME)};
 
                 asio::io_context io_context;
                 asio::ip::tcp::acceptor acceptor{io_context};
@@ -350,11 +359,11 @@ public:
                         return;
                 }
 
-                logger->info("Started protobuf server on 0.0.0.0:{}", options.protobuf_port);
+                logger->info("Started listening on 0.0.0.0:{}", options.protobuf_port);
 
                 for (;;) {
                         auto server{std::make_shared<ProtobufAdapter>(
-                                options.remote_host, io_context, logsink
+                                options.remote_host, io_context
                         )};
                         acceptor.accept(server->socket());
 
@@ -369,8 +378,8 @@ private:
 
 class GrpcAdapter final : public rslp::ProtoAdapter::Service {
 public:
-        GrpcAdapter(const std::string& redis_host, std::shared_ptr<spdlog::sinks::sink> logsink) :
-                client_{redis_host}, logger_{std::make_shared<spdlog::logger>(LOGGER_NAME, logsink)}
+        GrpcAdapter(const std::string& redis_host) :
+                client_{redis_host}, logger_{create_logger(LOGGER_NAME)}
         { }
 
         void initialize()
@@ -385,7 +394,6 @@ public:
                 for (const auto& arg: request->data()) {
                         command.push_back(arg.str());
                 }
-                logger_->debug("[{}] execute(): {}", context->peer(), request->ShortDebugString());
 
                 if (command.size()) {
                         std::string name{command.front()};
@@ -459,25 +467,22 @@ private:
 
 class GrpcServer {
 public:
-        void start(const Options& options, std::shared_ptr<spdlog::sinks::sink> logsink)
+        void start(const Options& options)
         {
-                logger_.reset(new spdlog::logger(LOGGER_NAME, logsink));
+                auto logger{create_logger(LOGGER_NAME)};
                 setup_grpc_logging();
 
                 grpc::ServerBuilder builder;
                 builder.AddListeningPort("0.0.0.0:" + options.grpc_port, grpc::InsecureServerCredentials());
 
-                GrpcAdapter adapter{options.remote_host, logsink};
+                GrpcAdapter adapter{options.remote_host};
                 adapter.initialize();
                 builder.RegisterService(&adapter);
 
-                server_ = builder.BuildAndStart();
-                server_->Wait();
-        }
+                auto server{builder.BuildAndStart()};
+                logger->info("Started listening on 0.0.0.0:{}", options.grpc_port);
 
-        void shutdown()
-        {
-                server_->Shutdown();
+                server->Wait();
         }
 
 private:
@@ -505,48 +510,32 @@ private:
         }
 
         const std::string LOGGER_NAME{"GrpcServer"};
-
-        std::shared_ptr<spdlog::logger> logger_;
-        std::unique_ptr<grpc::Server> server_;
 };
 
 
 class Proxy {
 public:
-        Proxy(const Options& options) : options_{options} { }
+        Proxy(const Options& options) :
+                options_{options}, logger_{spdlog::stdout_logger_mt(LOGGER_NAME)} { }
 
         void run()
         {
-                std::shared_ptr<spdlog::sinks::sink> logsink{
-                        std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt>()
-                };
-                logger_.reset(new spdlog::logger(LOGGER_NAME, logsink));
-                spdlog::register_logger(logger_);
-
-                setup_logger();
                 read_config_file();
 
                 if (options_.daemonize) {
-                        logger_->info("Daemonizing server, logfile: {}", options_.log_path);
-                        daemonize_process();
-                        // The parent process has exited already.
-
-                        // Drop the console logger and create a rotating file logger.
-                        spdlog::drop(LOGGER_NAME);
-                        logsink.reset(new spdlog::sinks::rotating_file_sink_mt(
-                                options_.log_path, 1048576 * 10, 10)
-                        );
-                        logger_.reset(new spdlog::logger(LOGGER_NAME, logsink));
-
-                        setup_logger();
+                        daemonize();
                 }
 
+                if (options_.verbose) {
+                        logger_->info("Setting logging level to verbose.");
+                        logger_->set_level(spdlog::level::debug);
+                }
 
                 ProtobufServer protobuf_server;
-                std::thread{&ProtobufServer::start, &protobuf_server, std::cref(options_), logsink}.detach();
+                std::thread{&ProtobufServer::start, &protobuf_server, std::cref(options_)}.detach();
 
                 GrpcServer grpc_server;
-                std::thread{&GrpcServer::start, &grpc_server, std::cref(options_), logsink}.detach();
+                std::thread{&GrpcServer::start, &grpc_server, std::cref(options_)}.detach();
 
                 for (;;);
         }
@@ -568,22 +557,26 @@ private:
                 }
         }
 
-        void setup_logger()
+        void daemonize()
         {
-                logger_->flush_on(spdlog::level::info);
+                logger_->info("Daemonizing server, logfile: {}", options_.log_path);
+                daemonize_process();
+                // The parent process has exited already.
 
-                if (options_.verbose) {
-                        logger_->info("Setting logging level to verbose.");
-                        logger_->set_level(spdlog::level::debug);
-                }
+                // Drop the console logger and create a rotating file logger.
+                spdlog::drop(LOGGER_NAME);
+
+                logger_ = spdlog::rotating_logger_mt(
+                        LOGGER_NAME, options_.log_path, 10485760 /* 10MB */, 10 /* files */
+                );
         }
 
+
+        const std::string LOGGER_NAME{GLOBAL_LOGGER_NAME};
 
         const Options& options_;
         std::shared_ptr<spdlog::logger> logger_;
         json config_;
-
-        const std::string LOGGER_NAME{GLOBAL_LOGGER_NAME};
 };
 
 
