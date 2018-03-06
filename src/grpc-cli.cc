@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
         GrpcResplyClient client{channel};
 
         while (std::cin) {
-                std::cout << options.host << ':' << "> ";
+                std::cout << options.host << "> ";
 
                 std::string line;
                 std::getline(std::cin, line);
