@@ -25,3 +25,7 @@ message Command {
 }
 
 
+service ProtoAdapter {
+        rpc execute(Command) returns (Command) {}
+        rpc subscribe(Command) returns (stream Command) {}
+}
