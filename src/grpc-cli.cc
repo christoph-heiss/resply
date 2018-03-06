@@ -19,7 +19,9 @@ struct Options {
 };
 
 
-static Options parse_commandline(int argc, char** argv)
+namespace {
+
+Options parse_commandline(int argc, char** argv)
 {
         Options options;
         bool show_help{};
@@ -38,6 +40,8 @@ static Options parse_commandline(int argc, char** argv)
         }
 
         return options;
+}
+
 }
 
 

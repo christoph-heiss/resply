@@ -15,6 +15,8 @@
 
 using resply::Result;
 
+namespace {
+
 enum RespTypes {
         SIMPLE_STRING = '+',
         ERROR = '-',
@@ -22,6 +24,8 @@ enum RespTypes {
         BULK_STRING = '$',
         ARRAY = '*'
 };
+
+}
 
 
 bool RespParser::parse(std::istream& stream)

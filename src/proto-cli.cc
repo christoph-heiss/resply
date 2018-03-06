@@ -28,7 +28,9 @@ struct Options {
 };
 
 
-static Options parse_commandline(int argc, char** argv)
+namespace {
+
+Options parse_commandline(int argc, char** argv)
 {
         Options options;
         bool show_help{};
@@ -48,7 +50,6 @@ static Options parse_commandline(int argc, char** argv)
 
         return options;
 }
-
 
 std::ostream& operator<<(std::ostream& ostream, const rslp::Command& command)
 {
@@ -90,7 +91,6 @@ std::ostream& operator<<(std::ostream& ostream, const rslp::Command& command)
 
         return ostream;
 }
-
 
 class ProtobufResplyClient {
 public:
@@ -189,6 +189,7 @@ private:
         asio::ip::tcp::socket socket_;
 };
 
+}
 
 
 int main(int argc, char* argv[])
