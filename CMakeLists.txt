@@ -33,10 +33,47 @@ include_directories($ENV{SPDLOG_INCLUDE_PATH})
 
 # protobuf
 find_package(Protobuf REQUIRED)
-include_directories(${Protobuf_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
+find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
 
+include_directories(${Protobuf_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 file(GLOB protos protos/*.proto)
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${protos})
+
+set(PROTO_PATH "${CMAKE_SOURCE_DIR}/protos")
+set(GENERATED_PROTOBUF_PATH "${CMAKE_BINARY_DIR}")
+set(GRPC_LIBRARIES grpc grpc++_unsecure)
+
+foreach(proto ${protos})
+        get_filename_component(proto_name ${proto} NAME_WE)
+        add_custom_command(
+                OUTPUT "${GENERATED_PROTOBUF_PATH}/${proto_name}.pb.h"
+                       "${GENERATED_PROTOBUF_PATH}/${proto_name}.pb.cc"
+                       "${GENERATED_PROTOBUF_PATH}/${proto_name}.grpc.pb.h"
+                       "${GENERATED_PROTOBUF_PATH}/${proto_name}.grpc.pb.cc"
+                COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+                ARGS "--proto_path=${PROTO_PATH}"
+                     "--cpp_out=${GENERATED_PROTOBUF_PATH}"
+                     "${proto}"
+                COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+                ARGS "--proto_path=${PROTO_PATH}"
+                     "--grpc_out=${GENERATED_PROTOBUF_PATH}"
+                     "--plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}"
+                     "${proto}"
+        )
+
+        list(APPEND GENERATED_PROTOBUF_FILES
+                "${GENERATED_PROTOBUF_PATH}/${proto_name}.pb.h"
+                "${GENERATED_PROTOBUF_PATH}/${proto_name}.pb.cc"
+        )
+
+        list(APPEND GENERATED_GRPC_FILES
+                "${GENERATED_PROTOBUF_PATH}/${proto_name}.grpc.pb.h"
+                "${GENERATED_PROTOBUF_PATH}/${proto_name}.grpc.pb.cc"
+        )
+endforeach(proto)
+
+# Fix compilation of gRPC files
+set_source_files_properties(${GENERATED_GRPC_FILES} PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
+
 
 # libresply
 add_library(libresply OBJECT src/libresply.cc src/resp-parser.cc)
@@ -57,15 +94,15 @@ install(FILES include/resply.h DESTINATION include)
 add_executable(resply-cli src/resply-cli.cc)
 target_link_libraries(resply-cli resply-static)
 
-add_executable(proto-cli src/proto-cli.cc ${PROTO_SRCS})
+add_executable(proto-cli src/proto-cli.cc ${GENERATED_PROTOBUF_FILES})
 target_link_libraries(proto-cli ${PROTOBUF_LIBRARIES})
 
-add_executable(grpc-cli src/grpc-cli.cc)
-
+add_executable(grpc-cli src/grpc-cli.cc ${GENERATED_PROTOBUF_FILES} ${GENERATED_GRPC_FILES})
+target_link_libraries(grpc-cli ${PROTOBUF_LIBRARIES} ${GRPC_LIBRARIES})
 
 # proxy
-add_executable(proxy src/proxy.cc ${PROTO_SRCS})
-target_link_libraries(proxy resply-static ${PROTOBUF_LIBRARIES})
+add_executable(proxy src/proxy.cc ${GENERATED_PROTOBUF_FILES} ${GENERATED_GRPC_FILES})
+target_link_libraries(proxy resply-static ${PROTOBUF_LIBRARIES} ${GRPC_LIBRARIES})
 
 
 # tests

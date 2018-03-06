@@ -147,13 +147,13 @@ static void daemonize_process()
 }
 
 
-class ProtobufRedisAdapter {
+class ProtobufAdapter {
 public:
-        ProtobufRedisAdapter(const std::string& redis_host, asio::io_context& io_context) :
+        ProtobufAdapter(const std::string& redis_host, asio::io_context& io_context) :
                 client_{redis_host}, socket_{io_context}, logger_{spdlog::get(LOGGER_NAME)}
         { }
 
-        ~ProtobufRedisAdapter()
+        ~ProtobufAdapter()
         {
                 logger_->info("Connection to {} closed.", remote_address_);
         }
@@ -184,7 +184,7 @@ public:
                         command.ParseFromString(request);
 
                         std::string debug_string{command.ShortDebugString()};
-                        logger_->debug("Received '{}' on {}", debug_string, remote_address_);
+                        logger_->debug("Received protobuf message '{}' from {}", debug_string, remote_address_);
 
                         std::vector<std::string> resply_command;
                         for (const auto& arg: command.data()) {
@@ -359,10 +359,10 @@ private:
                 logger_->info("Started listening on 0.0.0.0:{}", options_.port);
 
                 for (;;) {
-                        auto server{std::make_shared<ProtobufRedisAdapter>(options_.remote_host, io_context)};
+                        auto server{std::make_shared<ProtobufAdapter>(options_.remote_host, io_context)};
                         acceptor.accept(server->socket());
 
-                        std::thread{&ProtobufRedisAdapter::start, server}.detach();
+                        std::thread{&ProtobufAdapter::start, server}.detach();
                 }
         }
 
