@@ -70,7 +70,7 @@ Options parse_commandline(int argc, char** argv)
                         .doc("Path to the configuration file [default: $CWD/.proxy-conf.json]"),
                 clipp::option("-d", "--daemonize").set(options.daemonize).doc("Fork to background."),
                 clipp::option("-l", "--log-path").set(options.log_path)
-                        .doc("Path to the log file [default: $CWD/proxy.log] (Only applies when not daemonized.)"),
+                        .doc("Path to the log file [default: $CWD/proxy.log] (Only applies when daemonized.)"),
                 clipp::option("--protobuf-port").set(options.protobuf_port)
                         .doc("Port the protobuf server should listen on [default: 6543]"),
                 clipp::option("--grpc-port").set(options.grpc_port)
