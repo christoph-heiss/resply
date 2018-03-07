@@ -1,0 +1,8 @@
+{
+        "daemonize": false,
+        "log-path": "proxy.log",
+        "protobuf-port": 8765,
+        "grpc-port": 8766,
+        "redis-host": "localhost:6379",
+        "verbose": false
+}
