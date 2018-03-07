@@ -24,14 +24,13 @@
 #pragma GCC diagnostic pop
 
 
+namespace {
+
 struct Options {
         Options() : host{"localhost:6544"} { }
 
         std::string host;
 };
-
-
-namespace {
 
 std::ostream& operator<<(std::ostream& ostream, const rslp::Command& command)
 {
@@ -80,8 +79,8 @@ Options parse_commandline(int argc, char** argv)
         bool show_help{};
 
         auto cli = (
-                clipp::option("-h", "--host").set(options.host)
-                        .doc("Set the host (and port, optional) to connect to [default: localhost:6544]"),
+                clipp::option("-h", "--host") & clipp::value("host", options.host)
+                        .doc("Sets the host and port to connect to [default: localhost:6544]"),
                 clipp::option("--help").set(show_help).doc("Show help and exit.")
         );
 
@@ -95,7 +94,7 @@ Options parse_commandline(int argc, char** argv)
 
 class GrpcResplyClient {
 public:
-        GrpcResplyClient(std::shared_ptr<grpc::Channel> channel) :
+        explicit GrpcResplyClient(std::shared_ptr<grpc::Channel> channel) :
                 stub_{rslp::ProtoAdapter::NewStub(channel)}
         { }
 

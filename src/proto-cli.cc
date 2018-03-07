@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <ostream>
+#include <sstream>
 #include <arpa/inet.h>
 #include <functional>
 
@@ -20,15 +21,13 @@
 
 using namespace google;
 
+namespace {
+
 struct Options {
-        Options() : host{"localhost"}, port{"6543"} { }
+        Options() : host{"localhost:6543"} { }
 
         std::string host;
-        std::string port;
 };
-
-
-namespace {
 
 Options parse_commandline(int argc, char** argv)
 {
@@ -36,10 +35,8 @@ Options parse_commandline(int argc, char** argv)
         bool show_help{};
 
         auto cli = (
-                clipp::option("-h", "--host").set(options.host)
-                                             .doc("Set the host to connect to [default: localhost]"),
-                clipp::option("-p", "--port").set(options.port)
-                                             .doc("Set the port to connect to [default: 6543]"),
+                clipp::option("-h", "--host") & clipp::value("host", options.host)
+                        .doc("Sets the host and port to connect to [default: localhost:6543]"),
                 clipp::option("--help").set(show_help).doc("Show help and exit.")
         );
 
@@ -94,15 +91,21 @@ std::ostream& operator<<(std::ostream& ostream, const rslp::Command& command)
 
 class ProtobufResplyClient {
 public:
-        ProtobufResplyClient(const std::string& host, const std::string& port) :
-                host_{host}, port_{port}, socket_{io_context_}
-        { }
+        explicit ProtobufResplyClient(const std::string& host) :
+                socket_{io_context_}
+        {
+                std::stringstream stream{host};
+
+                std::getline(stream, host_, ':');
+                std::getline(stream, port_);
+        }
 
         bool connect()
         {
                 asio::error_code error_code;
                 asio::ip::tcp::resolver resolver{io_context_};
 
+                std::cout << "host=" << host_ << "; port=" << port_ << std::endl;
                 auto results = resolver.resolve(host_, port_, error_code);
                 if (error_code) {
                         std::cerr << "Error while connecting: " << error_code.message() << std::endl;
@@ -182,8 +185,8 @@ private:
         }
 
 private:
-        const std::string& host_;
-        const std::string& port_;
+        std::string host_;
+        std::string port_;
 
         asio::io_context io_context_;
         asio::ip::tcp::socket socket_;
@@ -197,13 +200,13 @@ int main(int argc, char* argv[])
         GOOGLE_PROTOBUF_VERIFY_VERSION;
         auto options{parse_commandline(argc, argv)};
 
-        ProtobufResplyClient client{options.host, options.port};
+        ProtobufResplyClient client{options.host};
         if (!client.connect()) {
                 return 1;
         }
 
         while (std::cin) {
-                std::cout << options.host << ':' << options.port << "> ";
+                std::cout << options.host << "> ";
 
                 std::string line;
                 std::getline(std::cin, line);

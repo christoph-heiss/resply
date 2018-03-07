@@ -16,14 +16,13 @@
 #include "resply.h"
 
 
+namespace {
+
 struct Options {
         Options() : host{"localhost:6379"} { }
 
         std::string host;
 };
-
-
-namespace {
 
 Options parse_commandline(int argc, char** argv)
 {
@@ -31,7 +30,7 @@ Options parse_commandline(int argc, char** argv)
         bool show_help{}, show_version{};
 
         auto cli = (
-                clipp::option("-h", "--host").set(options.host)
+                clipp::option("-h", "--host") & clipp::value("host", options.host)
                         .doc("Set the host (and port, optional) to connect to [default: localhost:6379]"),
                 clipp::option("--help").set(show_help).doc("Show help and exit."),
                 clipp::option("--version").set(show_version).doc("Show version and exit.")

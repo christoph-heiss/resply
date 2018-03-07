@@ -18,6 +18,7 @@
 #include <cctype>
 #include <algorithm>
 #include <functional>
+#include <type_traits>
 #include <arpa/inet.h>
 
 #include "asio.hpp"
@@ -25,6 +26,7 @@
 #include "spdlog/spdlog.h"
 #include "nlohmann/json.hpp"
 #include "resply.h"
+#include "optional.h"
 #include "rslp.pb.h"
 #include "grpc++/grpc++.h"
 #include "grpc/support/log.h"
@@ -38,46 +40,60 @@ using json = nlohmann::json;
 using namespace google;
 
 
-struct Options {
-        Options() :
-                config_path{".proxy-conf.json"}, daemonize{}, log_path{"proxy.log"},
-                protobuf_port{6543}, grpc_port{"6544"}, remote_host{"localhost:6379"}, verbose{} { }
-
-        std::string config_path;
-        bool daemonize;
-        std::string log_path;
-        unsigned short protobuf_port;
-        std::string grpc_port;
-        std::string remote_host;
-        bool verbose;
-};
-
-
 namespace {
 
 const std::string GLOBAL_LOGGER_NAME{"Proxy"};
 
 void resply_result_to_rslp_data(rslp::Command_Data* data, const resply::Result& result);
 
+struct Options {
+        bool daemonize;
+        std::string log_path;
+        unsigned short protobuf_port;
+        unsigned short grpc_port;
+        std::string redis_host;
+        bool verbose;
+};
 
 Options parse_commandline(int argc, char** argv)
 {
-        Options options;
         bool show_help{}, show_version{};
 
+        Optional<bool> daemonize{}, verbose{};
+        Optional<unsigned short> protobuf_port{6543}, grpc_port{6544};
+        Optional<std::string> config_path{".proxy-conf.json"};
+        Optional<std::string> log_path{"proxy.log"};
+        Optional<std::string> redis_host{"localhost:6379"};
+
         auto cli = (
-                clipp::option("-c", "--conf-path") & clipp::value("path", options.config_path)
+                clipp::option("-c", "--conf-path") & clipp::value("path")
+                        .call([&](auto p) { config_path.set_value(p); })
                         .doc("Path to the configuration file [default: $CWD/.proxy-conf.json]"),
-                clipp::option("-d", "--daemonize").set(options.daemonize).doc("Fork to background."),
-                clipp::option("-l", "--log-path") & clipp::value("path", options.log_path)
+
+                clipp::option("-d", "--daemonize")
+                        .call([&](auto d) { daemonize.set_value(d); })
+                        .doc("Fork to background."),
+
+                clipp::option("-l", "--log-path") & clipp::value("path")
+                        .call([&](auto p) { log_path.set_value(p); })
                         .doc("Path to the log file [default: $CWD/proxy.log] (Only applies when daemonized.)"),
-                clipp::option("--protobuf-port") & clipp::value("port", options.protobuf_port)
+
+                clipp::option("--protobuf-port") & clipp::integer("port")
+                        .call([&](auto p) { protobuf_port.set_value(static_cast<unsigned short>(std::stoi(p))); })
                         .doc("Port the protobuf server should listen on [default: 6543]"),
-                clipp::option("--grpc-port") & clipp::value("port", options.grpc_port)
+
+                clipp::option("--grpc-port") & clipp::integer("port")
+                        .call([&](auto p) { grpc_port.set_value(static_cast<unsigned short>(std::stoi(p))); })
                         .doc("Port the gRPC server should listen on [default: 6544]"),
-                clipp::option("-r", "--remote-host") & clipp::value("host", options.remote_host)
-                        .doc("Host (redis-server) to connect to [default: localhost:6379]"),
-                clipp::option("-v", "--verbose").set(options.verbose).doc("Enable verbose logging."),
+
+                clipp::option("-r", "--redis-host") & clipp::value("host")
+                        .call([&](auto h) { redis_host.set_value(h); })
+                        .doc("Host (redis server) to connect to [default: localhost:6379]"),
+
+                clipp::option("-v", "--verbose")
+                        .call([&](auto v) { verbose.set_value(v); })
+                        .doc("Enable verbose logging."),
+
                 clipp::option("--help").set(show_help).doc("Show help and exit."),
                 clipp::option("--version").set(show_version).doc("Show version and exit.")
         );
@@ -95,6 +111,34 @@ Options parse_commandline(int argc, char** argv)
                         << "Using resply version " << resply::version() << std::endl;
                 std::exit(0);
         }
+
+        json config;
+        if (config_path.value_or_default().length()) {
+                std::ifstream file{config_path.value_or_default()};
+                if (file) {
+                        file >> config;
+                        file.close();
+                }
+        }
+
+        auto choose_opt = [&](const std::string& name, const auto& opt)
+            -> typename std::remove_reference<decltype(opt)>::type::value_type {
+                if (opt.has_value()) {
+                        return opt.value();
+                } else if (config.count(name)) {
+                        return config[name];
+                }
+
+                return opt.default_value();
+        };
+
+        Options options;
+        options.daemonize = choose_opt("daemonize", daemonize);
+        options.log_path = choose_opt("log-path", log_path);
+        options.protobuf_port = choose_opt("protobuf-port", protobuf_port);
+        options.grpc_port = choose_opt("grpc-port", grpc_port);
+        options.redis_host = choose_opt("redis-host", redis_host);
+        options.verbose = choose_opt("verbose", verbose);
 
         return options;
 }
@@ -363,7 +407,7 @@ public:
 
                 for (;;) {
                         auto server{std::make_shared<ProtobufAdapter>(
-                                options.remote_host, io_context
+                                options.redis_host, io_context
                         )};
                         acceptor.accept(server->socket());
 
@@ -378,7 +422,7 @@ private:
 
 class GrpcAdapter final : public rslp::ProtoAdapter::Service {
 public:
-        GrpcAdapter(const std::string& redis_host) :
+        explicit GrpcAdapter(const std::string& redis_host) :
                 client_{redis_host}, logger_{create_logger(LOGGER_NAME)}
         { }
 
@@ -473,9 +517,12 @@ public:
                 setup_grpc_logging();
 
                 grpc::ServerBuilder builder;
-                builder.AddListeningPort("0.0.0.0:" + options.grpc_port, grpc::InsecureServerCredentials());
+                builder.AddListeningPort(
+                        "0.0.0.0:" + std::to_string(options.grpc_port),
+                        grpc::InsecureServerCredentials()
+                );
 
-                GrpcAdapter adapter{options.remote_host};
+                GrpcAdapter adapter{options.redis_host};
                 adapter.initialize();
                 builder.RegisterService(&adapter);
 
@@ -515,13 +562,11 @@ private:
 
 class Proxy {
 public:
-        Proxy(const Options& options) :
+        explicit Proxy(const Options& options) :
                 options_{options}, logger_{spdlog::stdout_color_mt(LOGGER_NAME)} { }
 
         void run()
         {
-                read_config_file();
-
                 if (options_.daemonize) {
                         daemonize();
                 }
@@ -541,22 +586,6 @@ public:
         }
 
 private:
-        void read_config_file()
-        {
-                if (!options_.config_path.length()) {
-                        return;
-                }
-
-                std::ifstream file{options_.config_path};
-
-                if (!file) {
-                        logger_->warn("Configuration file not found! Using compiled-in defaults ..");
-                } else {
-                        file >> config_;
-                        file.close();
-                }
-        }
-
         void daemonize()
         {
                 logger_->info("Daemonizing server, logfile: {}", options_.log_path);
@@ -576,7 +605,6 @@ private:
 
         const Options& options_;
         std::shared_ptr<spdlog::logger> logger_;
-        json config_;
 };
 
 
