@@ -66,16 +66,16 @@ Options parse_commandline(int argc, char** argv)
         bool show_help{}, show_version{};
 
         auto cli = (
-                clipp::option("-c", "--conf-path").set(options.config_path)
+                clipp::option("-c", "--conf-path") & clipp::value("path", options.config_path)
                         .doc("Path to the configuration file [default: $CWD/.proxy-conf.json]"),
                 clipp::option("-d", "--daemonize").set(options.daemonize).doc("Fork to background."),
-                clipp::option("-l", "--log-path").set(options.log_path)
+                clipp::option("-l", "--log-path") & clipp::value("path", options.log_path)
                         .doc("Path to the log file [default: $CWD/proxy.log] (Only applies when daemonized.)"),
-                clipp::option("--protobuf-port").set(options.protobuf_port)
+                clipp::option("--protobuf-port") & clipp::value("port", options.protobuf_port)
                         .doc("Port the protobuf server should listen on [default: 6543]"),
-                clipp::option("--grpc-port").set(options.grpc_port)
+                clipp::option("--grpc-port") & clipp::value("port", options.grpc_port)
                         .doc("Port the gRPC server should listen on [default: 6544]"),
-                clipp::option("-r", "--remote-host").set(options.remote_host)
+                clipp::option("-r", "--remote-host") & clipp::value("host", options.remote_host)
                         .doc("Host (redis-server) to connect to [default: localhost:6379]"),
                 clipp::option("-v", "--verbose").set(options.verbose).doc("Enable verbose logging."),
                 clipp::option("--help").set(show_help).doc("Show help and exit."),
