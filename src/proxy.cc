@@ -516,7 +516,7 @@ private:
 class Proxy {
 public:
         Proxy(const Options& options) :
-                options_{options}, logger_{spdlog::stdout_logger_mt(LOGGER_NAME)} { }
+                options_{options}, logger_{spdlog::stdout_color_mt(LOGGER_NAME)} { }
 
         void run()
         {
