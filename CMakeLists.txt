@@ -4,6 +4,8 @@ project(resply VERSION 0.1.0 DESCRIPTION "Modern redis client for C++")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(Threads REQUIRED)
+
 option(BUILD_DOC "Build documentation using doxygen" ON)
 
 add_definitions(-DASIO_STANDALONE)
@@ -92,7 +94,7 @@ install(FILES include/resply.h DESTINATION include)
 
 # cli
 add_executable(resply-cli src/resply-cli.cc)
-target_link_libraries(resply-cli resply-static)
+target_link_libraries(resply-cli resply-static ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(proto-cli src/proto-cli.cc ${GENERATED_PROTOBUF_FILES})
 target_link_libraries(proto-cli ${PROTOBUF_LIBRARIES})
@@ -112,7 +114,7 @@ foreach (test_source ${tests_source})
         set(tests ${tests} ${name})
 
         add_executable(${name} ${test_source})
-        target_link_libraries(${name} resply-static)
+        target_link_libraries(${name} resply-static ${CMAKE_THREAD_LIBS_INIT})
         set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endforeach ()
 
