@@ -31,7 +31,7 @@ Options parse_commandline(int argc, char** argv)
 
         auto cli = (
                 clipp::option("-h", "--host") & clipp::value("host", options.host)
-                        .doc("Set the host (and port, optional) to connect to [default: localhost:6379]"),
+                        .doc("Set the host to connect to [default: localhost:6379]"),
                 clipp::option("--help").set(show_help).doc("Show help and exit."),
                 clipp::option("--version").set(show_version).doc("Show version and exit.")
         );
