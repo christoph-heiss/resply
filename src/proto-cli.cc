@@ -105,7 +105,6 @@ public:
                 asio::error_code error_code;
                 asio::ip::tcp::resolver resolver{io_context_};
 
-                std::cout << "host=" << host_ << "; port=" << port_ << std::endl;
                 auto results = resolver.resolve(host_, port_, error_code);
                 if (error_code) {
                         std::cerr << "Error while connecting: " << error_code.message() << std::endl;
